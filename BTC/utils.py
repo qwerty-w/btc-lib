@@ -1,8 +1,14 @@
 from base58check import b58decode
 from hashlib import sha256
+from decimal import Decimal
 
 import bech32
 from const import PREFIXES
+
+
+def int2bytes(_i: int):
+    _h = '%0.2x' % _i
+    return bytes.fromhex(('' if len(_h) % 2 == 0 else '0') + _h)
 
 
 def get_2sha256(bytes_: bytes) -> bytes:
@@ -65,3 +71,11 @@ def validate_address(address: str, address_type: str, address_network: str) -> b
         return False
 
     return True
+
+
+def to_satoshis(value: float) -> int:
+    return int(value * 100000000)
+
+
+def to_bitcoins(value: int) -> Decimal:
+    return Decimal(value)
