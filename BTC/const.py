@@ -7,6 +7,10 @@ PREFIXES = {
     'wif': {
         'mainnet': b'\x80',
         'testnet': b'\xef'
+    },
+    'bech32': {
+        'mainnet': 'bc',
+        'testnet': 'tb'
     }
 }
 
