@@ -1,6 +1,7 @@
 
 
 MAX_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
+P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
 PREFIXES = {
     'wif': {
