@@ -129,7 +129,21 @@ class PublicKey:
         return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
 
     def get_address(self, address_type: str, network: str = 'mainnet'):
-        pass
+
+        if address_type in ('P2PKH', P2PKH):
+            return P2PKH.from_hash160(self.hash160, network)
+
+        elif address_type in ('P2SH', 'P2SH-P2WPKH', P2SH):
+            return P2SH.from_hash160(self.hash160, network)
+
+        elif address_type in ('P2WPKH', P2WPKH):
+            return P2WPKH.from_hash160(self.hash160, network)
+
+        elif address_type in ('P2WSH', P2WSH):
+            return P2WSH.from_hash160(self.hash160, network)
+
+        else:
+            raise exceptions.UnsupportedAddressType(address_type)
 
 
 class BitcoinAddress(ABC):
