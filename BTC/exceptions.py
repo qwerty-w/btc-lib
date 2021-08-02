@@ -14,3 +14,7 @@ class InvalidHash160(Exception):  # addr
 
 class UnsupportedSegwitVersion(Exception):  # ver
     pass
+
+
+class UnsupportedAddressType(Exception):  # address_type
+    pass
