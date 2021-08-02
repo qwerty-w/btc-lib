@@ -3,6 +3,8 @@
 MAX_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
+DEFAULT_WITNESS_VERSION = 0
+
 PREFIXES = {
     'wif': {
         'mainnet': b'\x80',
