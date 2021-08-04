@@ -3,8 +3,8 @@ from __future__ import annotations
 import struct
 from typing import Union, Iterable
 
-from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES
-from utils import to_bitcoins
+from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE
+from utils import to_bitcoins, get_2sha256
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH
 from script import Script
 import exceptions
@@ -123,6 +123,110 @@ class Output:  # address: BitcoinAddress, amount: int,
         ])
 
 
+class _Hash4SignGenerator:  # transaction hash for signing
+    def __init__(self, tx: Transaction, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
+        self.tx = tx
+        self.index = input_index
+        self.script4hash = script4hash
+        self.sighash = sighash
+
+    def get_default(self):
+        tx = self.tx.copy()
+
+        for inp in self.tx.inputs:
+            inp.script_sig = Script()
+
+        self.tx.inputs[self.index].script_sig = self.script4hash
+
+        if (self.sighash & 0x1f) == SIGHASHES['none']:
+            tx.outputs = ()
+
+            for n, _ in enumerate(tx.inputs):
+                if n != self.index:
+                    tx.inputs[n].sequence = EMPTY_SEQUENCE
+
+        elif (self.sighash & 0x1f) == SIGHASHES['single']:
+
+            try:
+                out = tx.outputs[self.index]
+            except IndexError:
+                raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
+
+            self.tx.outputs = tuple(Output(Script(), -1) for _ in range(self.index)) + (out,)
+
+            for n, inp in enumerate(tx.inputs):
+                if n != self.index:
+                    inp.sequence = EMPTY_SEQUENCE
+
+        if self.sighash & SIGHASHES['anyonecanpay']:
+            tx.inputs = (tx.inputs[self.index])
+
+        stream = self.tx.stream(exclude_witness=True) + struct.pack('<i', self.sighash)
+        return get_2sha256(stream)
+
+    def get_segwit(self):
+        tx = self.tx.copy()
+
+        base = self.sighash & 0x1f
+        anyone = self.sighash & 0xf0 == SIGHASHES['anyonecanpay']
+        sign_all = (base != SIGHASHES['single']) and (base != SIGHASHES['none'])
+
+        inps, seq, outs = b'\x00' * 32, b'\x00' * 32, b'\x00' * 32
+
+        if not anyone:
+            inps = b''
+            for inp in tx.inputs:
+                inps += bytes.fromhex(inp.tx_id)[::-1] + struct.pack('<L', inp.out_index)
+
+        if not anyone and sign_all:
+            seq = b''
+            for inp in tx.inputs:
+                seq += inp.sequence
+
+        if sign_all:
+            outs = b''
+            for out in tx.outputs:
+                script_pub_key = out.address.script_pub_key.to_bytes()
+                outs += struct.pack('<q', out.amount) + struct.pack('B', len(script_pub_key)) + script_pub_key
+
+        elif base == SIGHASHES['single']:
+
+            try:
+                out = tx.outputs[self.index]
+            except IndexError:
+                raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
+
+            script_pub_key = out.address.script_pub_key.to_bytes()
+            outs = struct.pack('<q', out.amount) + struct.pack('B', len(script_pub_key)) + script_pub_key
+
+        inps, seq, outs = get_2sha256(inps), get_2sha256(seq), get_2sha256(outs)
+
+        main_inp = bytes.fromhex(tx.inputs[self.index].tx_id)[::-1] + struct.pack('<L', tx.inputs[self.index].out_index)
+        main_inp_seq = tx.inputs[self.index].sequence
+
+        script4hash = self.script4hash.to_bytes()
+        script4hash_len = struct.pack('B', len(script4hash))
+
+        amount = struct.pack('<q', tx.inputs[self.index].amount)
+        sighash = struct.pack('<i', self.sighash)
+
+        raw_tx = b''.join([
+            tx.version,
+            inps,
+            seq,
+            main_inp,
+            script4hash_len,
+            script4hash,
+            amount,
+            main_inp_seq,
+            outs,
+            tx.locktime,
+            sighash
+        ])
+
+        return get_2sha256(raw_tx)
+
+
 class Transaction:
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
                  fee: int, *, remainder_address: Union[str, None] = None,
@@ -157,7 +261,8 @@ class Transaction:
         return any([inp.segwit for inp in self.inputs])
 
     def get_hash4sign(self, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
-        ...
+        gen = _Hash4SignGenerator(self, input_index, script4hash, sighash)
+        return gen.get_segwit() if self.inputs[input_index].segwit else gen.get_default()
 
     def default_sign_inputs(self):  # default sign inputs
         for inp in self.inputs:

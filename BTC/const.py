@@ -8,6 +8,8 @@ DEFAULT_LOCKTIME = b'\x00\x00\x00\x00'
 DEFAULT_WITNESS_VERSION = 0
 DEFAULT_SEQUENCE = b'\xff\xff\xff\xff'
 
+EMPTY_SEQUENCE = b'\x00\x00\x00\x00'
+
 PREFIXES = {
     'wif': {
         'mainnet': b'\x80',
