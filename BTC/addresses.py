@@ -12,6 +12,7 @@ import exceptions
 from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION
 from utils import get_2sha256, get_address_network, validate_address, get_address_type
 from script import Script
+from services import NetworkAPI, Unspent
 import bech32
 
 
@@ -180,8 +181,8 @@ class BitcoinAddress(ABC):
         except ValueError:
             raise exc from None
 
-    def get_unspent(self) -> list:  # todo
-        ...
+    def get_unspent(self) -> list[Unspent]:
+        return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
     @abstractmethod
     def from_hash160(self, hash160: str, network: str) -> BitcoinAddress:
