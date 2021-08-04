@@ -3,7 +3,10 @@
 MAX_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
+DEFAULT_VERSION = b'\x02\x00\x00\x00'
+DEFAULT_LOCKTIME = b'\x00\x00\x00\x00'
 DEFAULT_WITNESS_VERSION = 0
+DEFAULT_SEQUENCE = b'\xff\xff\xff\xff'
 
 PREFIXES = {
     'wif': {
