@@ -99,7 +99,28 @@ class Input:
 
 
 class Output:  # address: BitcoinAddress, amount: int,
-    pass
+    def __init__(self, address: Union[BitcoinAddress, Script], amount: int):
+        self.address = address
+        self.amount = amount
+
+    def copy(self) -> Output:
+        return Output(
+            self.address,
+            self.amount
+        )
+
+    def stream(self) -> bytes:
+        amount = struct.pack('<q', self.amount)
+        script_pub_key = self.address.script_pub_key.to_bytes() if isinstance(
+            self.address, BitcoinAddress
+        ) else self.address.to_bytes()
+        script_pub_key_len = struct.pack('B', len(script_pub_key))
+
+        return b''.join([
+            amount,
+            script_pub_key_len,
+            script_pub_key,
+        ])
 
 
 class Transaction:
