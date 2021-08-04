@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 from typing import Union, Iterable
 
-from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME
+from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES
 from utils import to_bitcoins
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH
 from script import Script
@@ -142,3 +142,56 @@ class Transaction:
 
         elif remainder_address is None and self.amount - out_amount != 0:
             raise exceptions.RemainderAddressRequired(to_bitcoins(self.amount), to_bitcoins(out_amount))
+
+    def copy(self):
+        return Transaction(
+            [inp.copy() for inp in self.inputs],
+            [out.copy() for out in self.outputs],
+            self.fee,
+            remainder_address=self.remainder_address,
+            version=self.version,
+            locktime=self.locktime
+        )
+
+    def has_segwit_input(self):
+        return any([inp.segwit for inp in self.inputs])
+
+    def get_hash4sign(self, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
+        ...
+
+    def default_sign_inputs(self):  # default sign inputs
+        for inp in self.inputs:
+            inp.default_sign(self)
+
+    def stream(self, *, exclude_witness: bool = False) -> bytes:
+        has_segwit = False if exclude_witness else self.has_segwit_input()
+
+        inps_len = bytes([len(self.inputs)])
+        inps = b''
+        for inp in self.inputs:
+            inps += inp.stream()
+
+        outs_len = bytes([len(self.outputs)])
+        outs = b''
+        for out in self.outputs:
+            outs += out.stream()
+
+        witnesses = b''
+        if has_segwit:
+            for inp in self.inputs:
+                witnesses += bytes([len(inp.witness)])
+                witnesses += inp.witness.to_bytes(segwit=True)
+
+        return b''.join([
+            self.version,
+            b'\x00\x01' if has_segwit else b'',
+            inps_len,
+            inps,
+            outs_len,
+            outs,
+            witnesses,
+            self.locktime
+        ])
+
+    def serialize(self):
+        return self.stream().hex()
