@@ -15,6 +15,14 @@ PREFIXES = {
         'mainnet': b'\x80',
         'testnet': b'\xef'
     },
+    'P2PKH': {
+        'mainnet': b'\x00',
+        'testnet': b'\x6f'
+    },
+    'P2SH': {
+        'mainnet': b'\x05',
+        'testnet': b'\xc4'
+    },
     'bech32': {
         'mainnet': 'bc',
         'testnet': 'tb'
