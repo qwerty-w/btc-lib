@@ -46,11 +46,6 @@ class UnsupportedSegwitVersion(exc):
     msg = 'unsupported segwit version: {}'
 
 
-class DefaultSignNotSupportNonSegwitP2SH(exc):
-    cls = AttributeError
-    msg = 'from P2SH addresses default_sign supports P2SH-P2WPKH input only, his Input.segwit = True'
-
-
 class DefaultSignSupportOnlyP2shP2wpkh(exc):
     cls = TypeError
     msg = 'from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received'

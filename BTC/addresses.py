@@ -129,7 +129,7 @@ class PublicKey:
         key_hex = self.key.to_string().hex().encode()
         return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
 
-    def get_address(self, address_type: str, network: str = 'mainnet'):
+    def get_address(self, address_type: str, network: str = 'mainnet') -> BitcoinAddress:
 
         if address_type in ('P2PKH', P2PKH):
             return P2PKH.from_hash160(self.hash160, network)
