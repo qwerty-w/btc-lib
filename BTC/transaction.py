@@ -12,8 +12,7 @@ import exceptions
 
 class Input:
     def __init__(self, pv: PrivateKey, address: BitcoinAddress, tx_id: str,
-                 out_index: int, amount: int, segwit: bool = False,
-                 sequence: bytes = DEFAULT_SEQUENCE):
+                 out_index: int, amount: int, sequence: bytes = DEFAULT_SEQUENCE):
 
         self.pv = pv
         self.pub = pv.pub
@@ -22,7 +21,6 @@ class Input:
         self.tx_id = tx_id
         self.out_index = out_index
         self.amount = amount
-        self.segwit = segwit
         self.sequence = sequence
 
         self.script_sig = Script()
@@ -38,7 +36,6 @@ class Input:
             self.tx_id,
             self.out_index,
             self.amount,
-            self.segwit,
             self.sequence,
         )
         instance.script_sig = self.script_sig
@@ -61,10 +58,7 @@ class Input:
             self.script_sig = script_sig
 
         elif isinstance(self.address, P2SH):
-            if not self.segwit:
-                raise exceptions.DefaultSignNotSupportNonSegwitP2SH
-
-            if P2SH.from_hash160(self.address.hash, self.address.network).string != self.address.string:
+            if self.pv.pub.get_address('P2SH-P2WPKH', self.address.network).string != self.address.string:
                 raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
 
             self.script_sig = Script(Script('OP_0', self.pub.hash160).to_hex())
@@ -258,7 +252,7 @@ class Transaction:
         )
 
     def has_segwit_input(self):
-        return any([inp.segwit for inp in self.inputs])
+        return any([inp.witness is not None for inp in self.inputs])
 
     def get_hash4sign(self, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
         gen = _Hash4SignGenerator(self, input_index, script4hash, sighash)
