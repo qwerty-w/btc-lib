@@ -134,7 +134,7 @@ class PublicKey:
         if address_type in ('P2PKH', P2PKH):
             return P2PKH.from_hash160(self.hash160, network)
 
-        elif address_type in ('P2SH', 'P2SH-P2WPKH', P2SH):
+        elif address_type in ('P2SH-P2WPKH', P2SH):
             return P2SH.from_hash160(self.hash160, network)
 
         elif address_type in ('P2WPKH', P2WPKH):
