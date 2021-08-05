@@ -1,6 +1,7 @@
 from typing import Union
 from abc import ABC
 from decimal import Decimal
+import re
 
 
 class exc(Exception, ABC):
@@ -12,8 +13,19 @@ class exc(Exception, ABC):
         if cls.cls is None:
             return super().__new__(cls, *args, **kwargs)
 
-        if isinstance(cls.cls, BaseException):
+        if len(args) > 0 and type(args[0]) is cls.cls:  # raise Exception (without call) == Exception(Exception())
+            return args[0]
+
+        if BaseException in cls.cls.__mro__:
+            count = len(re.findall('\{\}', cls.msg))
+
+            if count > len(args):
+                args += tuple('<unknown>' for _ in range(count - (len(args) + len(kwargs))))
+
             return cls.cls(cls.msg.format(*args, **kwargs))
+
+        else:
+            raise TypeError(f'{cls.cls} must inherit from BaseException')
 
 
 class InvalidAddress(exc):
