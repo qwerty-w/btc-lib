@@ -129,22 +129,20 @@ class PublicKey:
         key_hex = self.key.to_string().hex().encode()
         return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
 
-    def get_address(self, address_type: str, network: str = 'mainnet') -> BitcoinAddress:
+    def get_address(self, address_type: Union[str, BitcoinAddress], network: str = 'mainnet') -> BitcoinAddress:
 
-        if address_type in ('P2PKH', P2PKH):
-            return P2PKH.from_hash160(self.hash160, network)
+        cls = {
+            'P2PKH': P2PKH,
+            'P2SH-P2WPKH': P2SH,
+            'P2WPKH': P2WPKH,
+            'P2WSH': P2WSH
 
-        elif address_type in ('P2SH-P2WPKH', P2SH):
-            return P2SH.from_hash160(self.hash160, network)
+        }.get(address_type) if not isinstance(address_type, BitcoinAddress) else address_type
 
-        elif address_type in ('P2WPKH', P2WPKH):
-            return P2WPKH.from_hash160(self.hash160, network)
-
-        elif address_type in ('P2WSH', P2WSH):
-            return P2WSH.from_hash160(self.hash160, network)
-
-        else:
+        if cls is None:
             raise exceptions.UnsupportedAddressType(address_type)
+
+        return cls.from_pub(self, network)
 
 
 class BitcoinAddress(ABC):
@@ -170,22 +168,18 @@ class BitcoinAddress(ABC):
         return f'{self.__class__.__name__}({self.__str__().__repr__()})'
 
     @staticmethod
-    def check_hash160(hash160: str):
-        exc = exceptions.InvalidHash160(hash160)
+    def check_pub(pub: PublicKey):
+        if not isinstance(pub, PublicKey):
+            raise exceptions.InvalidPublicKeyType(type(pub))
 
-        if len(hash160) != 40:
-            raise exc
-
-        try:
-            bytes.fromhex(hash160)
-        except ValueError:
-            raise exc from None
+    def get_info(self) -> dict:
+        return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
     def get_unspent(self) -> list[Unspent]:
         return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
     @abstractmethod
-    def from_hash160(self, hash160: str, network: str) -> BitcoinAddress:
+    def from_pub(self, pub: PublicKey, network: str) -> BitcoinAddress:
         ...
 
     @abstractmethod
@@ -203,12 +197,12 @@ class DefaultAddress(BitcoinAddress, ABC):
         return PREFIXES[cls.type][network]
 
     @classmethod
-    def _from_hash160(cls, hash160: bytes, network: str) -> DefaultAddress:
-        raw_address_bytes = cls._get_prefix(network) + hash160
+    def _b58encode(cls, data: bytes, network: str) -> str:
+        raw_address_bytes = cls._get_prefix(network) + data
         raw_address_hash = get_2sha256(raw_address_bytes)
         address = b58encode(raw_address_bytes + raw_address_hash[0:4]).decode('utf-8')
 
-        return cls(address)
+        return address
 
     def _get_hash(self) -> str:
         address_bytes = str(self).encode()
@@ -220,9 +214,9 @@ class P2PKH(DefaultAddress):
     type = 'P2PKH'
 
     @classmethod
-    def from_hash160(cls, hash160: str, network: str) -> P2PKH:
-        cls.check_hash160(hash160)
-        return cls._from_hash160(bytes.fromhex(hash160), network)
+    def from_pub(cls, pub: PublicKey, network: str) -> P2PKH:
+        cls.check_pub(pub)
+        return cls(cls._b58encode(bytes.fromhex(pub.hash160), network))
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
@@ -232,13 +226,13 @@ class P2SH(DefaultAddress):
     type = 'P2SH'
 
     @classmethod
-    def from_hash160(cls, hash160: str, network: str) -> P2SH:  # hash160 -> P2SH-P2WPKH address
-        cls.check_hash160(hash160)
+    def from_pub(cls, pub: PublicKey, network: str) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
+        cls.check_pub(pub)
 
         ripemd160 = hashlib_new('ripemd160')
-        ripemd160.update(sha256(Script('OP_0', hash160).to_bytes()).digest())
+        ripemd160.update(sha256(Script('OP_0', pub.hash160).to_bytes()).digest())
 
-        return cls._from_hash160(ripemd160.digest(), network)
+        return cls(cls._b58encode(ripemd160.digest(), network))
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
@@ -257,8 +251,8 @@ class SegwitAddress(BitcoinAddress, ABC):
         self.version: int = ver
 
     @classmethod
-    def _from_hash160(cls, hash160: bytes, network: str, *, version: int) -> SegwitAddress:
-        return cls(bech32_encode(list(hash160), version, network))
+    def _bech32encode(cls, data: bytes, network: str, *, version: int) -> str:
+        return bech32_encode(list(data), version, network)
 
     def _get_hash(self) -> str:
         _, int_list = bech32_decode(self.string, self.network)
@@ -272,22 +266,21 @@ class P2WPKH(SegwitAddress):
     type = 'P2WPKH'
 
     @classmethod
-    def from_hash160(cls, hash160: str, network: str) -> P2WPKH:
-        cls.check_hash160(hash160)
-        return cls._from_hash160(bytes.fromhex(hash160), network, version=DEFAULT_WITNESS_VERSION)
+    def from_pub(cls, pub: PublicKey, network: str) -> P2WPKH:
+        cls.check_pub(pub)
+        return cls(cls._bech32encode(bytes.fromhex(pub.hash160), network, version=DEFAULT_WITNESS_VERSION))
 
 
 class P2WSH(SegwitAddress):
     type = 'P2WSH'
 
     @classmethod
-    def from_hash160(cls, hash160: str, network: str) -> P2WSH:
-        cls.check_hash160(hash160)
+    def from_pub(cls, pub: PublicKey, network: str) -> P2WSH:
+        cls.check_pub(pub)
 
-        script_bytes: bytes = Script('OP_0', hash160).to_bytes()
-        hash_sha256: bytes = sha256(script_bytes).digest()
-
-        return cls._from_hash160(hash_sha256, network, version=DEFAULT_WITNESS_VERSION)
+        witness_script = Script('OP_1', pub.hex, 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
+        hash_sha256 = sha256(witness_script).digest()
+        return cls(cls._bech32encode(hash_sha256, network, version=DEFAULT_WITNESS_VERSION))
 
 
 def get_address(address: str) -> BitcoinAddress:
@@ -301,6 +294,6 @@ def get_address(address: str) -> BitcoinAddress:
     }.get(addr_type, None)
 
     if cls is None:
-        raise exceptions.InvalidAddress(address, '<unknown>', '<unknown>')
+        raise exceptions.InvalidAddress(address)
 
     return cls(address)

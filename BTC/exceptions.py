@@ -35,7 +35,7 @@ class InvalidAddress(exc):
 
 class InvalidAddressClassType(exc):
     cls = TypeError
-    msg = 'invalid address class-type: {}, use addresses.P2[KH/SH/WPKH/WSH]'
+    msg = 'invalid address class-type - {}, use addresses.P2[KH/SH/WPKH/WSH]'
 
 
 class InvalidHash160(exc):
@@ -46,6 +46,11 @@ class InvalidHash160(exc):
 class InvalidWif(exc):
     cls = ValueError
     msg = 'invalid WIF ({}), checksum not verified'
+
+
+class InvalidPublicKeyType(exc):
+    cls = TypeError
+    msg = 'invalid public key class-type - {}, use addresses.PublicKey'
 
 
 class UnsupportedAddressType(exc):
@@ -65,7 +70,7 @@ class DefaultSignSupportOnlyP2shP2wpkh(exc):
 
 class OutAmountMoreInputAmount(exc):
     cls = ArithmeticError
-    msg = 'output amount ({}) more than input amount {}'
+    msg = 'output amount ({}) more than input amount ({})'
 
 
 class RemainderAddressRequired(exc):
