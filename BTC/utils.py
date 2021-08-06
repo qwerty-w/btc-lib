@@ -78,4 +78,4 @@ def to_satoshis(value: float) -> int:
 
 
 def to_bitcoins(value: int) -> Decimal:
-    return Decimal(value)
+    return Decimal(value) / 100000000
