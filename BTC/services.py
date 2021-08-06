@@ -15,6 +15,10 @@ class DefaultAPI(ABC):
 
     @classmethod
     def _get_address_info_data(cls, address: str, *, network: str = 'mainnet') -> dict:
+        """
+        For used by subclasses. The start of the function body for
+        subclasses is the same, so it was moved to the parent class.
+        """
         api = cls.TEST_ADDRESS_API if network == 'testnet' else cls.MAIN_ADDRESS_API
         r = requests.get(api.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
 
@@ -296,20 +300,20 @@ class NetworkAPI(NetworkAPI):
     ]
 
     @classmethod
-    def get_address_info(cls, address: str) -> tuple:
+    def get_address_info(cls, address: str) -> dict:
         for api_call in cls.GET_ADDRESS_INFO_MAIN:
-            try:
-                return api_call(address)
+            try:  # received, sent, tx_count, balance
+                return dict(zip(('received', 'sent', 'tx_count', 'balance'), api_call(address)))
             except cls.IGNORED_ERRORS:
                 pass
 
         raise ConnectionError('All APIs are unreachable.')
 
     @classmethod
-    def get_address_info_testnet(cls, address: str) -> tuple:
+    def get_address_info_testnet(cls, address: str) -> dict:
         for api_call in cls.GET_ADDRESS_INFO_TEST:
             try:
-                return api_call(address)
+                return dict(zip(('received', 'sent', 'tx_count', 'balance'), api_call(address)))
             except cls.IGNORED_ERRORS:
                 pass
 
