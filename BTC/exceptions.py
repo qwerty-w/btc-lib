@@ -85,3 +85,13 @@ class SighashSingleRequiresInputAndOutputWithSameIndexes(exc):
     cls = ValueError
     msg = 'sighash single signs the output with the same index as the input, the input index is {}, output with ' \
           'that index do not exists'
+
+
+class ForDefaultSignPrivateKeyMustBeSet(exc):
+    cls = ValueError
+    msg = 'for Input.default_sign() need set Input.pv = PrivateKey()'
+
+
+class ForDefaultSignAddressMustBeSet(exc):
+    cls = ValueError
+    msg = 'for Input.default_sign() need set Input.address = BitcoinAddress()'
