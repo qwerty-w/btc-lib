@@ -7,15 +7,23 @@ from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES
 from utils import to_bitcoins, get_2sha256
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH
 from script import Script
+from services import Unspent
 import exceptions
 
 
 class Input:
-    def __init__(self, pv: PrivateKey, address: BitcoinAddress, tx_id: str,
-                 out_index: int, amount: int, sequence: bytes = DEFAULT_SEQUENCE):
-
+    def __init__(self, tx_id: str, out_index: int, amount: int, pv: Union[PrivateKey, None] = None,
+                 address: Union[BitcoinAddress, None] = None, *, sequence: bytes = DEFAULT_SEQUENCE):
+        """
+        :param tx_id: Transaction hex.
+        :param out_index: Unspent output index in transaction.
+        :param amount: Transaction amount.
+        :param pv: Private Key, can be None if .default_sign() won't be used.
+        :param address: Bitcoin address, can be None as well as pv.
+        :param sequence: Sequence (more in Bitcoin Core documentation).
+        """
         self.pv = pv
-        self.pub = pv.pub
+        self.pub = pv.pub if pv is not None else None
         self.address = address
 
         self.tx_id = tx_id
@@ -29,14 +37,19 @@ class Input:
     def __repr__(self):
         return f'{self.__class__.__name__}(tx_id={self.tx_id}, out_index={self.out_index})'
 
+    @classmethod
+    def from_unspent(cls, unspent: Unspent, pv: Union[PrivateKey, None] = None,
+                     address: Union[BitcoinAddress, None] = None, *, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
+        return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence=sequence)
+
     def copy(self) -> Input:
         instance = Input(
-            self.pv,
-            self.address,
             self.tx_id,
             self.out_index,
             self.amount,
-            self.sequence,
+            self.pv,
+            self.address,
+            sequence=self.sequence,
         )
         instance.script_sig = self.script_sig
         instance.witness = self.witness
@@ -44,31 +57,44 @@ class Input:
         return instance
 
     def default_sign(self, tx: Transaction):  # default sign
-        script4hash = Script('OP_DUP', 'OP_HASH160', self.pub.hash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        """
+        Default sign supports P2PKH, P2SH-P2WPKH, P2WPKH, P2WSH.
+        The last three use a witness (tx.get_hash4sign(segwit=True))
+        """
+        if not isinstance(self.pv, PrivateKey):
+            raise exceptions.ForDefaultSignPrivateKeyMustBeSet
+        if not isinstance(self.address, BitcoinAddress):
+            raise exceptions.ForDefaultSignAddressMustBeSet
 
         try:
             index = tx.inputs.index(self)
         except ValueError:
             raise ValueError(f'received tx has no input {repr(self)}')
 
-        hash4sign = tx.get_hash4sign(index, script4hash)
-        script_sig = Script(self.pv.sign_tx(hash4sign), self.pub.hex)
+        if isinstance(self.address, P2WSH):
+            witness_script = Script('OP_1', self.pub.hex, 'OP_1', 'OP_CHECKMULTISIG')
+            hash4sign = tx.get_hash4sign(index, witness_script, True)
+            sig = self.pv.sign_tx(hash4sign)
+            self.witness = Script('OP_0', sig, witness_script.to_hex())
+
+            return
+
+        script4hash = Script('OP_DUP', 'OP_HASH160', self.pub.hash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        hash4sign = tx.get_hash4sign(index, script4hash, False if isinstance(self.address, P2PKH) else True)
+        sig = Script(self.pv.sign_tx(hash4sign), self.pub.hex)
 
         if isinstance(self.address, P2PKH):
-            self.script_sig = script_sig
+            self.script_sig = sig
 
-        elif isinstance(self.address, P2SH):
-            if self.pv.pub.get_address('P2SH-P2WPKH', self.address.network).string != self.address.string:
+        elif isinstance(self.address, P2SH):  # supports only P2SH-P2WPKH
+            if self.pub.get_address('P2SH-P2WPKH', self.address.network).string != self.address.string:
                 raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
 
             self.script_sig = Script(Script('OP_0', self.pub.hash160).to_hex())
-            self.witness = script_sig
+            self.witness = sig
 
         elif isinstance(self.address, P2WPKH):
-            self.witness = script_sig
-
-        elif isinstance(self.address, P2WSH):  # todo
-            pass
+            self.witness = sig
 
         else:
             raise exceptions.InvalidAddressClassType(type(self.address))
@@ -92,7 +118,7 @@ class Input:
         ])
 
 
-class Output:  # address: BitcoinAddress, amount: int,
+class Output:
     def __init__(self, address: Union[BitcoinAddress, Script], amount: int):
         self.address = address
         self.amount = amount
@@ -117,20 +143,20 @@ class Output:  # address: BitcoinAddress, amount: int,
         ])
 
 
-class _Hash4SignGenerator:  # transaction hash for signing
+class _Hash4SignGenerator:  # hash for sign
     def __init__(self, tx: Transaction, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
         self.tx = tx
         self.index = input_index
-        self.script4hash = script4hash
+        self.script4hash = script4hash  # script for hash for sign
         self.sighash = sighash
 
     def get_default(self):
         tx = self.tx.copy()
 
-        for inp in self.tx.inputs:
+        for inp in tx.inputs:
             inp.script_sig = Script()
 
-        self.tx.inputs[self.index].script_sig = self.script4hash
+        tx.inputs[self.index].script_sig = self.script4hash
 
         if (self.sighash & 0x1f) == SIGHASHES['none']:
             tx.outputs = ()
@@ -146,7 +172,7 @@ class _Hash4SignGenerator:  # transaction hash for signing
             except IndexError:
                 raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
 
-            self.tx.outputs = tuple(Output(Script(), -1) for _ in range(self.index)) + (out,)
+            tx.outputs = tuple(Output(Script(), -1) for _ in range(self.index)) + (out,)
 
             for n, inp in enumerate(tx.inputs):
                 if n != self.index:
@@ -155,7 +181,7 @@ class _Hash4SignGenerator:  # transaction hash for signing
         if self.sighash & SIGHASHES['anyonecanpay']:
             tx.inputs = (tx.inputs[self.index])
 
-        stream = self.tx.stream(exclude_witness=True) + struct.pack('<i', self.sighash)
+        stream = tx.stream(exclude_witness=True) + struct.pack('<i', self.sighash)
         return get_2sha256(stream)
 
     def get_segwit(self):
@@ -236,7 +262,7 @@ class Transaction:
 
         out_amount = sum(out.amount for out in self.outputs) + self.fee
         if out_amount > self.amount:
-            raise exceptions.OutAmountMoreInputAmount(self.amount, out_amount)
+            raise exceptions.OutAmountMoreInputAmount(out_amount, self.amount)
 
         elif remainder_address is None and self.amount - out_amount != 0:
             raise exceptions.RemainderAddressRequired(to_bitcoins(self.amount), to_bitcoins(out_amount))
@@ -252,11 +278,20 @@ class Transaction:
         )
 
     def has_segwit_input(self):
-        return any([inp.witness is not None for inp in self.inputs])
+        return any([not inp.witness.is_empty() for inp in self.inputs])
 
-    def get_hash4sign(self, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
+    def get_hash4sign(self, input_index: int, script4hash: Script,
+                      segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
+        """
+        :param input_index:
+        :param script4hash: Script which will be used in default input script field.
+        :param segwit: If hash4sign needed for script in witness - use segwit=True.
+                       Else if using default input script - False.
+        :param sighash: Signature Hash (more in Bitcoin Core documentation).
+        :return: Hash for private key signing.
+        """
         gen = _Hash4SignGenerator(self, input_index, script4hash, sighash)
-        return gen.get_segwit() if self.inputs[input_index].segwit else gen.get_default()
+        return gen.get_segwit() if segwit else gen.get_default()
 
     def default_sign_inputs(self):  # default sign inputs
         for inp in self.inputs:
