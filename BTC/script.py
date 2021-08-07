@@ -361,13 +361,16 @@ class Script:
     def __init__(self, *data: Union[str, bytes, int]):
         self.script = tuple(_process_input_data(data))
 
-    def __len__(self):
+    def __repr__(self) -> str:
+        return str(self.script)
+
+    def __len__(self) -> int:
         return len(self.script)
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         return len(self) == 0
 
-    def _stream(self, *, segwit: bool = False):
+    def _stream(self, *, segwit: bool = False) -> bytes:
 
         """
         Converts the script to bytes.
