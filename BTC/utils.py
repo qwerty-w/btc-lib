@@ -6,9 +6,13 @@ import bech32
 from const import PREFIXES
 
 
-def int2bytes(_i: int):
+def int2bytes(_i: int) -> bytes:
     _h = '%0.2x' % _i
     return bytes.fromhex(('' if len(_h) % 2 == 0 else '0') + _h)
+
+
+def bytes2int(_bytes: bytes) -> int:
+    return int(_bytes.hex(), 16)
 
 
 def get_2sha256(bytes_: bytes) -> bytes:
