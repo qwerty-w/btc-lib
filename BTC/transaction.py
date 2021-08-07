@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import struct
 from typing import Union, Iterable
+import json
 
+import utils
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE
 from utils import to_bitcoins, get_2sha256
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH
@@ -15,9 +18,19 @@ def get_inputs(*args: Union[list[PrivateKey, BitcoinAddress], tuple[PrivateKey, 
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
-class Input:
+class AsSupportObject(ABC):
+    @abstractmethod
+    def as_dict(self) -> dict:
+        ...
+
+    @abstractmethod
+    def as_json(self, value: Union[dict, list], indent=None) -> str:
+        return json.dumps(value, indent=indent)
+
+
+class Input(AsSupportObject):
     def __init__(self, tx_id: str, out_index: int, amount: int, pv: Union[PrivateKey, None] = None,
-                 address: Union[BitcoinAddress, None] = None, *, sequence: bytes = DEFAULT_SEQUENCE):
+                 address: Union[BitcoinAddress, None] = None, sequence: bytes = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -38,12 +51,41 @@ class Input:
         self.script_sig = Script()
         self.witness = Script()
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}(tx_id={self.tx_id}, out_index={self.out_index})'
+    def __repr__(self) -> str:
+        args = {
+            'tx_id': self.tx_id,
+            'out_index': self.out_index
+        }
+
+        if self.address:
+            args['address'] = self.address
+        if self.sequence != DEFAULT_SEQUENCE:
+            args['sequence'] = self.sequence
+
+        return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
+
+    def as_dict(self, *, address: bool = True, script: bool = True, witness: bool = True) -> dict:
+        base = {
+            'tx_id': self.tx_id,
+            'out_index': self.out_index,
+        }
+
+        if address:
+            base = {'address': self.address.string} | base
+        if script and not self.script_sig.is_empty():
+            base['script'] = self.script_sig.to_hex()
+        if witness and not self.witness.is_empty():
+            base['witness'] = self.witness.to_hex()
+        base['sequence'] = utils.bytes2int(self.sequence)
+
+        return base
+
+    def as_json(self, *, indent=None, **kwargs) -> str:
+        return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     @classmethod
     def from_unspent(cls, unspent: Unspent, pv: Union[PrivateKey, None] = None,
-                     address: Union[BitcoinAddress, None] = None, *, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
+                     address: Union[BitcoinAddress, None] = None, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
         return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence=sequence)
 
     def copy(self) -> Input:
@@ -122,10 +164,28 @@ class Input:
         ])
 
 
-class Output:
+class Output(AsSupportObject):
     def __init__(self, address: Union[BitcoinAddress, Script], amount: int):
         self.address = address
         self.amount = amount
+
+    def __repr__(self):  # todo
+        args = {
+            'address': self.address,
+            'amount': self.amount
+        }
+        return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
+
+    def as_dict(self, *, address_as_script: bool = False) -> dict:
+        return dict([
+            ('address', self.address.string)
+            if not address_as_script else
+            ('script', self.address.script_pub_key.to_hex()),
+            ('amount', self.amount)
+        ])
+
+    def as_json(self, *, indent=None, **kwargs) -> str:
+        return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Output:
         return Output(
@@ -251,7 +311,7 @@ class _Hash4SignGenerator:  # hash for sign
         return get_2sha256(raw_tx)
 
 
-class Transaction:
+class Transaction(AsSupportObject):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
                  fee: int, *, remainder_address: Union[str, None] = None,
                  version: bytes = DEFAULT_VERSION, locktime: bytes = DEFAULT_LOCKTIME):
@@ -271,7 +331,23 @@ class Transaction:
         elif remainder_address is None and self.amount - out_amount != 0:
             raise exceptions.RemainderAddressRequired(to_bitcoins(self.amount), to_bitcoins(out_amount))
 
-    def copy(self):
+    def __repr__(self):
+        return str(self.as_dict())
+
+    def as_dict(self, *, inp_address: bool = True, scripts: bool = True,
+                witnesses: bool = True, out_address_as_script: bool = False) -> dict:
+        return {
+            'inputs': [inp.as_dict(address=inp_address, script=scripts, witness=witnesses) for inp in self.inputs],
+            'outputs': [out.as_dict(address_as_script=out_address_as_script) for out in self.outputs],
+            'fee': self.fee,
+            'version': int(self.version.hex().replace('0', '')),
+            'locktime': int(self.locktime.hex(), 16)
+        }
+
+    def as_json(self, *, indent=None, **kwargs) -> str:
+        return super().as_json(self.as_dict(**kwargs), indent=indent)
+
+    def copy(self) -> Transaction:
         return Transaction(
             [inp.copy() for inp in self.inputs],
             [out.copy() for out in self.outputs],
@@ -281,7 +357,7 @@ class Transaction:
             locktime=self.locktime
         )
 
-    def has_segwit_input(self):
+    def has_segwit_input(self) -> bool:
         return any([not inp.witness.is_empty() for inp in self.inputs])
 
     def get_hash4sign(self, input_index: int, script4hash: Script,
@@ -331,5 +407,8 @@ class Transaction:
             self.locktime
         ])
 
-    def serialize(self):
+    def serialize(self) -> str:
         return self.stream().hex()
+
+    def get_id(self) -> str:  # todo
+        ...
