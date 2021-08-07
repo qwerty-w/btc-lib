@@ -18,7 +18,7 @@ def get_inputs(*args: Union[list[PrivateKey, BitcoinAddress], tuple[PrivateKey, 
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
-class AsSupportObject(ABC):
+class SupportsDumps(ABC):
     @abstractmethod
     def as_dict(self) -> dict:
         ...
@@ -28,7 +28,7 @@ class AsSupportObject(ABC):
         return json.dumps(value, indent=indent)
 
 
-class Input(AsSupportObject):
+class Input(SupportsDumps):
     def __init__(self, tx_id: str, out_index: int, amount: int, pv: Union[PrivateKey, None] = None,
                  address: Union[BitcoinAddress, None] = None, sequence: bytes = DEFAULT_SEQUENCE):
         """
@@ -172,7 +172,7 @@ class Input(AsSupportObject):
         ])
 
 
-class Output(AsSupportObject):
+class Output(SupportsDumps):
     def __init__(self, address: Union[BitcoinAddress, Script], amount: int):
         self.address = address
         self.amount = amount
@@ -319,7 +319,7 @@ class _Hash4SignGenerator:  # hash for sign
         return get_2sha256(raw_tx)
 
 
-class Transaction(AsSupportObject):
+class Transaction(SupportsDumps):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
                  fee: int, *, remainder_address: Union[str, None] = None,
                  version: bytes = DEFAULT_VERSION, locktime: bytes = DEFAULT_LOCKTIME):
