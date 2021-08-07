@@ -65,20 +65,28 @@ class Input(AsSupportObject):
         return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
 
     def as_dict(self, *, address: bool = True, script: bool = True, witness: bool = True) -> dict:
-        base = {
-            'tx_id': self.tx_id,
-            'out_index': self.out_index,
-        }
+        items = [
+            ('tx_id', self.tx_id),
+            ('out_index', self.out_index)
+        ]
 
         if address:
-            base = {'address': self.address.string} | base
+            items = [
+                ('address', self.address), *items
+            ]
         if script and not self.script_sig.is_empty():
-            base['script'] = self.script_sig.to_hex()
+            items.append(
+                ('script', self.script_sig)
+            )
         if witness and not self.witness.is_empty():
-            base['witness'] = self.witness.to_hex()
-        base['sequence'] = utils.bytes2int(self.sequence)
+            items.append(
+                ('witness', self.witness)
+            )
+        items.append(
+            ('sequence', utils.bytes2int(self.sequence))
+        )
 
-        return base
+        return dict(items)
 
     def as_json(self, *, indent=None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
