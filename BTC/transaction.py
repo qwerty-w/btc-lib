@@ -418,5 +418,5 @@ class Transaction(SupportsDumps):
     def serialize(self) -> str:
         return self.stream().hex()
 
-    def get_id(self) -> str:  # todo
-        ...
+    def get_id(self) -> str:
+        return get_2sha256(self.stream()).hex()[::-1]
