@@ -11,6 +11,10 @@ from services import Unspent
 import exceptions
 
 
+def get_inputs(*args: Union[list[PrivateKey, BitcoinAddress], tuple[PrivateKey, BitcoinAddress]]) -> list[Input]:
+    return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
+
+
 class Input:
     def __init__(self, tx_id: str, out_index: int, amount: int, pv: Union[PrivateKey, None] = None,
                  address: Union[BitcoinAddress, None] = None, *, sequence: bytes = DEFAULT_SEQUENCE):
