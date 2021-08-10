@@ -14,6 +14,7 @@
 # karask/python-bitcoin-utils and modified subsequently.
 
 
+from __future__ import annotations
 from typing import Union, Iterable
 import struct
 
@@ -344,13 +345,13 @@ def _process_input_data(data: Iterable) -> list:
                 try:
                     bytes.fromhex(item)
                 except ValueError:
-                    raise ValueError(f'hex or opcode (OP_<...>) expected, but \'{item}\' received')
+                    raise ValueError(f'hex or opcode (OP_<...>) expected, but \'{item}\' received') from None
 
         elif isinstance(item, bytes):
             item = item.hex()
 
         else:
-            raise TypeError(f'args type must be str, bytes or int, but {type(item)} received')
+            raise TypeError(f'args type must be str, bytes or int, but {type(item)} received') from None
 
         _data.append(item)
 
@@ -367,11 +368,61 @@ class Script:
     def __len__(self) -> int:
         return len(self.script)
 
+    @classmethod
+    def from_raw(cls, data: Union[str, bytes, list[int]], *, segwit: bool = False) -> Script:
+        script = []
+        bytes_ = bytes.fromhex(data) if isinstance(data, str) else bytes(data) if isinstance(data, list) else data
+
+        i = 0
+        while len(bytes_) > i:
+            byte = bytes([bytes_[i]])
+            byte_int = byte[0]
+
+            # if opcode
+            op = CODE_OPS.get(byte)
+            if op:
+                script.append(op)
+                i += 1
+                continue
+
+            # if spec byte (0x4c, 0x4d, 0x4e) and not segwit
+            if not segwit and byte in [b'\x4c', b'\x4d', b'\x4e']:
+                size = int.from_bytes(
+                    bytes_[{
+                        b'\x4c': slice(i + 1),
+                        b'\x4d': slice(i, i + 2),
+                        b'\x4e': slice(i, i + 4)
+                    }[byte]],
+                    'little'
+                )
+                script.append(bytes_[i:i + size])
+                i += size
+                continue
+
+            # other
+
+            if byte_int < 253:
+                start, size = 1, byte_int
+
+            else:
+                start = {
+                    253: 2,
+                    254: 4,
+                    255: 8
+                }[byte_int] + 1
+
+                size = int.from_bytes(bytes_[i: i + 9][1:start][::-1], 'big')
+
+            start += i
+            i = start + size
+            script.append(bytes_[start:i].hex())
+
+        return cls(*script)
+
     def is_empty(self) -> bool:
         return len(self) == 0
 
     def _stream(self, *, segwit: bool = False) -> bytes:
-
         """
         Converts the script to bytes.
         If an OP code the appropriate byte is included according to:
@@ -379,7 +430,6 @@ class Script:
         If not consider it data (signature, public key, public key hash, etc.) and
         and include with appropriate OP_PUSHDATA OP code plus length
         """
-
         script_bytes = b''
         for token in self.script:
 
