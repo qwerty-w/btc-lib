@@ -53,6 +53,11 @@ class InvalidPublicKeyType(exc):
     msg = 'invalid public key class-type - {}, use addresses.PublicKey'
 
 
+class InvalidScriptPubKey(exc):
+    cls = ValueError
+    msg = 'invalid script_pub_key - {}'
+
+
 class UnsupportedAddressType(exc):
     cls = TypeError
     msg = 'unsupported type {}, supported only P2PKH, P2SH (P2SH-P2WPKH), P2WPKH, P2WSH'

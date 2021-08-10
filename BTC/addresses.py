@@ -4,24 +4,16 @@ from abc import ABC, abstractmethod
 from hashlib import sha256, new as hashlib_new
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.util import sigencode_der
-from typing import Union, Iterable
+from typing import Union
 from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
 import exceptions
-from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION
+from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
 from utils import get_2sha256, get_address_network, validate_address, get_address_type
 from script import Script
 from services import NetworkAPI, Unspent
 import bech32
-
-
-def bech32_encode(data: Iterable[int], version: int, network: str) -> str:
-    return bech32.encode(PREFIXES['bech32'][network], version, data)
-
-
-def bech32_decode(address: str, network: str) -> tuple:
-    return bech32.decode(PREFIXES['bech32'][network], address)
 
 
 class PrivateKey:
@@ -45,7 +37,7 @@ class PrivateKey:
 
         return SigningKey.from_string(key, curve=SECP256k1)
 
-    def to_wif(self, *, network: str = 'mainnet', compressed: bool = True) -> str:
+    def to_wif(self, *, network: str = DEFAULT_NETWORK, compressed: bool = True) -> str:
         data = PREFIXES['wif'][network] + self.key.to_string() + (b'\x01' if compressed else b'')
         h = get_2sha256(data)
         checksum = h[0:4]
@@ -129,7 +121,7 @@ class PublicKey:
         key_hex = self.key.to_string().hex().encode()
         return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
 
-    def get_address(self, address_type: Union[str, BitcoinAddress], network: str = 'mainnet') -> BitcoinAddress:
+    def get_address(self, address_type: Union[str, BitcoinAddress], network: str = DEFAULT_NETWORK) -> BitcoinAddress:
 
         cls = {
             'P2PKH': P2PKH,
@@ -167,6 +159,14 @@ class BitcoinAddress(ABC):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.__str__().__repr__()})'
 
+    @abstractmethod
+    def from_pub(self, pub: PublicKey, network: str, **kwargs) -> BitcoinAddress:
+        ...
+
+    @abstractmethod
+    def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
+        ...
+
     @staticmethod
     def check_pub(pub: PublicKey):
         if not isinstance(pub, PublicKey):
@@ -179,10 +179,6 @@ class BitcoinAddress(ABC):
         return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
     @abstractmethod
-    def from_pub(self, pub: PublicKey, network: str) -> BitcoinAddress:
-        ...
-
-    @abstractmethod
     def _get_hash(self) -> str:
         ...
 
@@ -193,8 +189,15 @@ class BitcoinAddress(ABC):
 
 class DefaultAddress(BitcoinAddress, ABC):
     @classmethod
+    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK) -> DefaultAddress:
+        return cls(cls._b58encode(bytes.fromhex(hash_), network))
+
+    @classmethod
     def _get_prefix(cls, network: str):
         return PREFIXES[cls.type][network]
+
+    def _get_hash(self) -> str:
+        return self._b58decode(self.string)
 
     @classmethod
     def _b58encode(cls, data: bytes, network: str) -> str:
@@ -204,9 +207,9 @@ class DefaultAddress(BitcoinAddress, ABC):
 
         return address
 
-    def _get_hash(self) -> str:
-        address_bytes = str(self).encode()
-        hash160_bytes = b58decode(address_bytes)[1:-4]
+    @staticmethod
+    def _b58decode(address: str) -> str:
+        hash160_bytes = b58decode(address.encode())[1:-4]
         return hash160_bytes.hex()
 
 
@@ -214,7 +217,7 @@ class P2PKH(DefaultAddress):
     type = 'P2PKH'
 
     @classmethod
-    def from_pub(cls, pub: PublicKey, network: str) -> P2PKH:
+    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2PKH:
         cls.check_pub(pub)
         return cls(cls._b58encode(bytes.fromhex(pub.hash160), network))
 
@@ -226,7 +229,7 @@ class P2SH(DefaultAddress):
     type = 'P2SH'
 
     @classmethod
-    def from_pub(cls, pub: PublicKey, network: str) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
+    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
         cls.check_pub(pub)
 
         ripemd160 = hashlib_new('ripemd160')
@@ -241,46 +244,50 @@ class P2SH(DefaultAddress):
 class SegwitAddress(BitcoinAddress, ABC):
     def __init__(self, address: str):
         super().__init__(address)
-
-        ver, _ = bech32_decode(address, self.network)
-        if ver is None:
-            raise exceptions.InvalidAddress(address)
-        if ver != DEFAULT_WITNESS_VERSION:
-            raise exceptions.UnsupportedSegwitVersion(ver)
-
-        self.version: int = ver
+        self.version: int = self._bech32decode(address, self.network)[0]
 
     @classmethod
-    def _bech32encode(cls, data: bytes, network: str, *, version: int) -> str:
-        return bech32_encode(list(data), version, network)
+    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK,
+                  version: int = DEFAULT_WITNESS_VERSION) -> SegwitAddress:
+        return cls(cls._bech32encode(bytes.fromhex(hash_), network, version))
 
     def _get_hash(self) -> str:
-        _, int_list = bech32_decode(self.string, self.network)
+        _, int_list = self._bech32decode(self.string, self.network)
         return bytes(int_list).hex()
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_0', self.hash)
+
+    @staticmethod
+    def _bech32encode(data: bytes, network: str, version: int) -> str:
+        return bech32.encode(PREFIXES['bech32'][network], version, list(data))
+
+    @staticmethod
+    def _bech32decode(address: str, network: str) -> tuple:
+        return bech32.decode(PREFIXES['bech32'][network], address)
 
 
 class P2WPKH(SegwitAddress):
     type = 'P2WPKH'
 
     @classmethod
-    def from_pub(cls, pub: PublicKey, network: str) -> P2WPKH:
+    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
+                 version: int = DEFAULT_WITNESS_VERSION) -> P2WPKH:
         cls.check_pub(pub)
-        return cls(cls._bech32encode(bytes.fromhex(pub.hash160), network, version=DEFAULT_WITNESS_VERSION))
+        return cls(cls._bech32encode(bytes.fromhex(pub.hash160), network, version))
 
 
 class P2WSH(SegwitAddress):
     type = 'P2WSH'
 
     @classmethod
-    def from_pub(cls, pub: PublicKey, network: str) -> P2WSH:
+    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
+                 version: int = DEFAULT_WITNESS_VERSION) -> P2WSH:
         cls.check_pub(pub)
 
         witness_script = Script('OP_1', pub.hex, 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
         hash_sha256 = sha256(witness_script).digest()
-        return cls(cls._bech32encode(hash_sha256, network, version=DEFAULT_WITNESS_VERSION))
+        return cls(cls._bech32encode(hash_sha256, network, version))
 
 
 def get_address(address: str) -> BitcoinAddress:
@@ -297,3 +304,43 @@ def get_address(address: str) -> BitcoinAddress:
         raise exceptions.InvalidAddress(address)
 
     return cls(address)
+
+
+def from_script_pub_key(data: Union[Script, str]) -> BitcoinAddress:
+    script = data if isinstance(data, Script) else Script.from_raw(data)
+    script_len = len(script)
+
+    p2pkh = {
+        0: 'OP_DUP',
+        1: 'OP_HASH160',
+        3: 'OP_EQUALVERIFY',
+        4: 'OP_CHECKSIG'
+    }
+    p2sh = {
+        0: 'OP_HASH160',
+        -1: 'OP_EQUAL'
+    }
+    segwit = {
+        0: 'OP_0'
+    }
+
+    check = lambda dict_: all([script.script[index] == value for index, value in dict_.items()])
+
+    if script_len == 5 and check(p2pkh):
+        return P2PKH.from_hash(script.script[2])
+
+    elif script_len == 3 and check(p2sh):
+        return P2SH.from_hash(script.script[1])
+
+    elif script_len == 2 and check(segwit):
+
+        hash_ = script.script[1]
+        hash_len = len(hash_)
+
+        if hash_len == 40:
+            return P2WPKH.from_hash(hash_)
+
+        elif hash_len == 64:
+            return P2WSH.from_hash(hash_)
+
+    raise exceptions.InvalidScriptPubKey(data)
