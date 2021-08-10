@@ -415,6 +415,10 @@ class Transaction(SupportsDumps):
             self.locktime
         ])
 
+    @classmethod
+    def deserialize(cls, tx_hex: str) -> Transaction:  # todo
+        return ...
+
     def serialize(self) -> str:
         return self.stream().hex()
 
