@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from hashlib import sha256, new as hashlib_new
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.util import sigencode_der
-from typing import Union
 from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
@@ -17,7 +16,7 @@ import bech32
 
 
 class PrivateKey:
-    def __init__(self, wif: Union[str, None] = None):
+    def __init__(self, wif: str | None = None):
         self.key = self._from_wif(wif) if wif else SigningKey.generate(curve=SECP256k1)
         self.pub = self._get_public_key()
         self.bytes = self.key.to_string()
@@ -51,7 +50,7 @@ class PrivateKey:
     def _get_public_key(self) -> PublicKey:
         return PublicKey('04' + self.key.get_verifying_key().to_string().hex())
 
-    def sign_tx(self, tx_hash: bytes, sighash: int = SIGHASHES['all']):
+    def sign_tx(self, tx_hash: bytes, sighash: int = SIGHASHES['all']) -> str:
         sig = self.key.sign_digest_deterministic(tx_hash, sigencode=sigencode_der, hashfunc=sha256)
 
         pref = sig[0]
@@ -81,7 +80,7 @@ class PrivateKey:
 
 
 class PublicKey:
-    def __init__(self, hex_):
+    def __init__(self, hex_: str):
 
         fb = hex_[:2]
         hex_b = bytes.fromhex(hex_)
@@ -121,7 +120,7 @@ class PublicKey:
         key_hex = self.key.to_string().hex().encode()
         return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
 
-    def get_address(self, address_type: Union[str, BitcoinAddress], network: str = DEFAULT_NETWORK) -> BitcoinAddress:
+    def get_address(self, address_type: str | BitcoinAddress, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
 
         cls = {
             'P2PKH': P2PKH,
@@ -166,11 +165,6 @@ class BitcoinAddress(ABC):
     @abstractmethod
     def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
         ...
-
-    @staticmethod
-    def check_pub(pub: PublicKey):
-        if not isinstance(pub, PublicKey):
-            raise exceptions.InvalidPublicKeyType(type(pub))
 
     def get_info(self) -> dict:
         return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
@@ -218,7 +212,6 @@ class P2PKH(DefaultAddress):
 
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2PKH:
-        cls.check_pub(pub)
         return cls(cls._b58encode(bytes.fromhex(pub.hash160), network))
 
     def _get_script_pub_key(self) -> Script:
@@ -230,8 +223,6 @@ class P2SH(DefaultAddress):
 
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
-        cls.check_pub(pub)
-
         ripemd160 = hashlib_new('ripemd160')
         ripemd160.update(sha256(Script('OP_0', pub.hash160).to_bytes()).digest())
 
@@ -273,7 +264,6 @@ class P2WPKH(SegwitAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WPKH:
-        cls.check_pub(pub)
         return cls(cls._bech32encode(bytes.fromhex(pub.hash160), network, version))
 
 
@@ -283,8 +273,6 @@ class P2WSH(SegwitAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WSH:
-        cls.check_pub(pub)
-
         witness_script = Script('OP_1', pub.hex, 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
         hash_sha256 = sha256(witness_script).digest()
         return cls(cls._bech32encode(hash_sha256, network, version))
@@ -306,7 +294,7 @@ def get_address(address: str) -> BitcoinAddress:
     return cls(address)
 
 
-def from_script_pub_key(data: Union[Script, str]) -> BitcoinAddress:
+def from_script_pub_key(data: Script | str) -> BitcoinAddress:
     script = data if isinstance(data, Script) else Script.from_raw(data)
     script_len = len(script)
 
