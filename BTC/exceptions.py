@@ -1,11 +1,11 @@
-from typing import Union
+from __future__ import annotations
 from abc import ABC
 from decimal import Decimal
 import re
 
 
 class exc(Exception, ABC):
-    cls: Union[BaseException, None] = Exception
+    cls: BaseException | None = Exception
     msg: str = 'default exception'
 
     def __new__(cls, *args, **kwargs):
@@ -40,17 +40,12 @@ class InvalidAddressClassType(exc):
 
 class InvalidHash160(exc):
     cls = ValueError
-    msg = 'invalid hash160 ({})'
+    msg = 'invalid hash160 - {}'
 
 
 class InvalidWif(exc):
     cls = ValueError
-    msg = 'invalid WIF ({}), checksum not verified'
-
-
-class InvalidPublicKeyType(exc):
-    cls = TypeError
-    msg = 'invalid public key class-type - {}, use addresses.PublicKey'
+    msg = 'invalid WIF (checksum not verified) - {}'
 
 
 class InvalidScriptPubKey(exc):

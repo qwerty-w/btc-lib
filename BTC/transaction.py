@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import struct
-from typing import Union, Iterable
+from typing import Iterable
 import json
 
 import utils
@@ -14,7 +14,7 @@ from services import Unspent
 import exceptions
 
 
-def get_inputs(*args: Union[list[PrivateKey, BitcoinAddress], tuple[PrivateKey, BitcoinAddress]]) -> list[Input]:
+def get_inputs(*args: list[PrivateKey, BitcoinAddress] | tuple[PrivateKey, BitcoinAddress]) -> list[Input]:
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
@@ -24,13 +24,13 @@ class SupportsDumps(ABC):
         ...
 
     @abstractmethod
-    def as_json(self, value: Union[dict, list], indent=None) -> str:
+    def as_json(self, value: dict | list, indent: int = None) -> str:
         return json.dumps(value, indent=indent)
 
 
 class Input(SupportsDumps):
-    def __init__(self, tx_id: str, out_index: int, amount: int, pv: Union[PrivateKey, None] = None,
-                 address: Union[BitcoinAddress, None] = None, sequence: bytes = DEFAULT_SEQUENCE):
+    def __init__(self, tx_id: str, out_index: int, amount: int, pv: PrivateKey | None = None,
+                 address: BitcoinAddress | None = None, sequence: bytes = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -51,7 +51,7 @@ class Input(SupportsDumps):
         self.script_sig = Script()
         self.witness = Script()
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         args = {
             'tx_id': self.tx_id,
             'out_index': self.out_index
@@ -88,12 +88,12 @@ class Input(SupportsDumps):
 
         return dict(items)
 
-    def as_json(self, *, indent=None, **kwargs) -> str:
+    def as_json(self, *, indent: int = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     @classmethod
-    def from_unspent(cls, unspent: Unspent, pv: Union[PrivateKey, None] = None,
-                     address: Union[BitcoinAddress, None] = None, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
+    def from_unspent(cls, unspent: Unspent, pv: PrivateKey | None = None,
+                     address: BitcoinAddress | None = None, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
         return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence=sequence)
 
     def copy(self) -> Input:
@@ -173,11 +173,11 @@ class Input(SupportsDumps):
 
 
 class Output(SupportsDumps):
-    def __init__(self, address: Union[BitcoinAddress, Script], amount: int):
+    def __init__(self, address: BitcoinAddress | Script, amount: int):
         self.address = address
         self.amount = amount
 
-    def __repr__(self):  # todo
+    def __repr__(self):
         args = {
             'address': self.address,
             'amount': self.amount
@@ -192,7 +192,7 @@ class Output(SupportsDumps):
             ('amount', self.amount)
         ])
 
-    def as_json(self, *, indent=None, **kwargs) -> str:
+    def as_json(self, *, indent: int | None = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Output:
@@ -321,7 +321,7 @@ class _Hash4SignGenerator:  # hash for sign
 
 class Transaction(SupportsDumps):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
-                 fee: int, *, remainder_address: Union[str, None] = None,
+                 fee: int, *, remainder_address: str | None = None,
                  version: bytes = DEFAULT_VERSION, locktime: bytes = DEFAULT_LOCKTIME):
 
         self.inputs = tuple(inputs)
@@ -352,7 +352,7 @@ class Transaction(SupportsDumps):
             'locktime': int(self.locktime.hex(), 16)
         }
 
-    def as_json(self, *, indent=None, **kwargs) -> str:
+    def as_json(self, *, indent: int | None = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Transaction:
