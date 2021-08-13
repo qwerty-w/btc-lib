@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-import struct
 from typing import Iterable
 import json
 
 import utils
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE
 from utils import to_bitcoins, get_2sha256
-from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH
+from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
 from services import Unspent
 import exceptions
+from services import NetworkAPI
 
 
 def get_inputs(*args: list[PrivateKey, BitcoinAddress] | tuple[PrivateKey, BitcoinAddress]) -> list[Input]:
@@ -60,7 +60,7 @@ class Input(SupportsDumps):
         if self.address:
             args['address'] = self.address
         if self.sequence != DEFAULT_SEQUENCE:
-            args['sequence'] = self.sequence
+            args['sequence'] = utils.bytes2int(self.sequence, 'little')
 
         return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
 
@@ -70,22 +70,16 @@ class Input(SupportsDumps):
             ('out_index', self.out_index)
         ]
 
-        if address:
-            items = [
-                ('address', self.address), *items
-            ]
-        if script and not self.script_sig.is_empty():
-            items.append(
-                ('script', self.script_sig)
-            )
-        if witness and not self.witness.is_empty():
-            items.append(
-                ('witness', self.witness)
-            )
-        items.append(
-            ('sequence', utils.bytes2int(self.sequence))
-        )
+        if address and self.address:
+            items = [('address', self.address.string), *items]
 
+        if script and not self.script_sig.is_empty():
+            items.append(('script', self.script_sig.to_hex()))
+
+        if witness and not self.witness.is_empty():
+            items.append(('witness', self.witness.to_hex()))
+
+        items.append(('sequence', utils.bytes2int(self.sequence, 'little')))
         return dict(items)
 
     def as_json(self, *, indent: int = None, **kwargs) -> str:
@@ -159,14 +153,14 @@ class Input(SupportsDumps):
 
     def stream(self) -> bytes:
         tx_id = bytes.fromhex(self.tx_id)[::-1]
-        index = struct.pack('<L', self.out_index)
+        index = self.out_index.to_bytes(4, 'little')
         sig = self.script_sig.to_bytes()
-        sig_len = struct.pack('B', len(sig))
+        sig_size = utils.pack_size(len(sig), increased_separator=True)
 
         return b''.join([
             tx_id,
             index,
-            sig_len,
+            sig_size,
             sig,
             self.sequence
         ])
@@ -174,7 +168,7 @@ class Input(SupportsDumps):
 
 class Output(SupportsDumps):
     def __init__(self, address: BitcoinAddress | Script, amount: int):
-        self.address = address
+        self.address = address if isinstance(address, BitcoinAddress) else from_script_pub_key(address)
         self.amount = amount
 
     def __repr__(self):
@@ -202,15 +196,12 @@ class Output(SupportsDumps):
         )
 
     def stream(self) -> bytes:
-        amount = struct.pack('<q', self.amount)
-        script_pub_key = self.address.script_pub_key.to_bytes() if isinstance(
-            self.address, BitcoinAddress
-        ) else self.address.to_bytes()
-        script_pub_key_len = struct.pack('B', len(script_pub_key))
+        script_pub_key = self.address.script_pub_key.to_bytes()
+        script_pub_key_size = utils.pack_size(len(script_pub_key), increased_separator=True)
 
         return b''.join([
-            amount,
-            script_pub_key_len,
+            self.amount.to_bytes(8, 'little'),
+            script_pub_key_size,
             script_pub_key,
         ])
 
@@ -222,7 +213,7 @@ class _Hash4SignGenerator:  # hash for sign
         self.script4hash = script4hash  # script for hash for sign
         self.sighash = sighash
 
-    def get_default(self):
+    def get_default(self) -> bytes:
         tx = self.tx.copy()
 
         for inp in tx.inputs:
@@ -253,10 +244,10 @@ class _Hash4SignGenerator:  # hash for sign
         if self.sighash & SIGHASHES['anyonecanpay']:
             tx.inputs = (tx.inputs[self.index])
 
-        stream = tx.stream(exclude_witness=True) + struct.pack('<i', self.sighash)
+        stream = tx.stream(exclude_witnesses=True) + self.sighash.to_bytes(4, 'little')
         return get_2sha256(stream)
 
-    def get_segwit(self):
+    def get_segwit(self) -> bytes:
         tx = self.tx.copy()
 
         base = self.sighash & 0x1f
@@ -268,18 +259,15 @@ class _Hash4SignGenerator:  # hash for sign
         if not anyone:
             inps = b''
             for inp in tx.inputs:
-                inps += bytes.fromhex(inp.tx_id)[::-1] + struct.pack('<L', inp.out_index)
+                inps += bytes.fromhex(inp.tx_id)[::-1] + inp.out_index.to_bytes(4, 'little')
 
-        if not anyone and sign_all:
-            seq = b''
-            for inp in tx.inputs:
-                seq += inp.sequence
+            if sign_all:
+                seq = b''
+                for inp in tx.inputs:
+                    seq += inp.sequence
 
         if sign_all:
-            outs = b''
-            for out in tx.outputs:
-                script_pub_key = out.address.script_pub_key.to_bytes()
-                outs += struct.pack('<q', out.amount) + struct.pack('B', len(script_pub_key)) + script_pub_key
+            outs = b''.join(out.stream() for out in tx.outputs)
 
         elif base == SIGHASHES['single']:
 
@@ -288,26 +276,26 @@ class _Hash4SignGenerator:  # hash for sign
             except IndexError:
                 raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
 
-            script_pub_key = out.address.script_pub_key.to_bytes()
-            outs = struct.pack('<q', out.amount) + struct.pack('B', len(script_pub_key)) + script_pub_key
+            outs = out.stream()
 
         inps, seq, outs = get_2sha256(inps), get_2sha256(seq), get_2sha256(outs)
 
-        main_inp = bytes.fromhex(tx.inputs[self.index].tx_id)[::-1] + struct.pack('<L', tx.inputs[self.index].out_index)
+        main_inp = bytes.fromhex(tx.inputs[self.index].tx_id)[::-1]
+        main_inp += tx.inputs[self.index].out_index.to_bytes(4, 'little')
         main_inp_seq = tx.inputs[self.index].sequence
 
         script4hash = self.script4hash.to_bytes()
-        script4hash_len = struct.pack('B', len(script4hash))
+        script4hash_size = utils.pack_size(len(script4hash), increased_separator=True)
 
-        amount = struct.pack('<q', tx.inputs[self.index].amount)
-        sighash = struct.pack('<i', self.sighash)
+        amount = tx.inputs[self.index].amount.to_bytes(8, 'little')
+        sighash = self.sighash.to_bytes(4, 'little')
 
         raw_tx = b''.join([
             tx.version,
             inps,
             seq,
             main_inp,
-            script4hash_len,
+            script4hash_size,
             script4hash,
             amount,
             main_inp_seq,
@@ -317,6 +305,77 @@ class _Hash4SignGenerator:  # hash for sign
         ])
 
         return get_2sha256(raw_tx)
+
+
+class _TransactionDeserializer:
+    def __init__(self, tx_hex: str):
+        self.hex = tx_hex
+        self.raw = bytes.fromhex(tx_hex)
+
+    def is_segwit_tx(self) -> bool:
+        return self.raw[4] == 0
+
+    def pop(self, value: int = None) -> bytes:
+
+        if value >= 0:
+            data = self.raw[:value]
+            self.raw = self.raw[value:]
+
+        else:
+            data = self.raw[value:]
+            self.raw = self.raw[:value]
+
+        return data
+
+    def pop_size(self) -> int:
+        size, self.raw = utils.split_size(self.raw, increased_separator=True)
+        return size
+
+    def deserialize(self) -> dict[str, str | int | list[dict]]:
+        segwit = self.is_segwit_tx()
+        data = {
+            'inputs': [],
+            'outputs': [],
+            'version': utils.bytes2int(self.pop(4), 'little'),
+            'locktime': utils.bytes2int(self.pop(-4), 'little')
+        }
+
+        if segwit:
+            self.pop(2)  # pop marker and flag
+
+        # inputs
+        inps_count = self.pop_size()
+        for _ in range(inps_count):
+            data['inputs'].append({
+                'tx_id': self.pop(32)[::-1].hex(),
+                'out_index': utils.bytes2int(self.pop(4), 'little'),
+                'script_sig': Script.from_raw(self.pop(self.pop_size())).to_hex(),
+                'sequence': utils.bytes2int(self.pop(4), 'little')
+            })
+
+        # outputs
+        outs_count = self.pop_size()
+        for _ in range(outs_count):
+            amount = utils.bytes2int(self.pop(8), 'little')
+            data['outputs'].append({
+                'script_pub_key': self.pop(self.pop_size()).hex(),
+                'amount': amount
+            })
+
+        # witnesses
+        if segwit:
+            for inp_index in range(inps_count):
+                items_count = self.pop_size()
+                script = Script.from_raw(self.raw, segwit=True, max_items_count=items_count)
+                data['inputs'][inp_index]['witness'] = script.to_hex(segwit=True)
+
+                # sort order
+                seq = data['inputs'][inp_index].pop('sequence')
+                data['inputs'][inp_index]['sequence'] = seq
+
+                self.pop(len(script.to_bytes(segwit=True)))
+
+        return data
 
 
 class Transaction(SupportsDumps):
@@ -348,8 +407,8 @@ class Transaction(SupportsDumps):
             'inputs': [inp.as_dict(address=inp_address, script=scripts, witness=witnesses) for inp in self.inputs],
             'outputs': [out.as_dict(address_as_script=out_address_as_script) for out in self.outputs],
             'fee': self.fee,
-            'version': int(self.version.hex().replace('0', '')),
-            'locktime': int(self.locktime.hex(), 16)
+            'version': utils.bytes2int(self.version, 'little'),
+            'locktime': utils.bytes2int(self.locktime)
         }
 
     def as_json(self, *, indent: int | None = None, **kwargs) -> str:
@@ -368,6 +427,9 @@ class Transaction(SupportsDumps):
     def has_segwit_input(self) -> bool:
         return any([not inp.witness.is_empty() for inp in self.inputs])
 
+    def get_id(self) -> str:
+        return get_2sha256(self.stream()).hex()[::-1]
+
     def get_hash4sign(self, input_index: int, script4hash: Script,
                       segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
         """
@@ -385,15 +447,15 @@ class Transaction(SupportsDumps):
         for inp in self.inputs:
             inp.default_sign(self)
 
-    def stream(self, *, exclude_witness: bool = False) -> bytes:
-        has_segwit = False if exclude_witness else self.has_segwit_input()
+    def stream(self, *, exclude_witnesses: bool = False) -> bytes:
+        has_segwit = False if exclude_witnesses else self.has_segwit_input()
 
-        inps_len = bytes([len(self.inputs)])
+        inps_count = utils.pack_size(len(self.inputs), increased_separator=True)
         inps = b''
         for inp in self.inputs:
             inps += inp.stream()
 
-        outs_len = bytes([len(self.outputs)])
+        outs_count = utils.pack_size(len(self.outputs), increased_separator=True)
         outs = b''
         for out in self.outputs:
             outs += out.stream()
@@ -401,26 +463,70 @@ class Transaction(SupportsDumps):
         witnesses = b''
         if has_segwit:
             for inp in self.inputs:
-                witnesses += bytes([len(inp.witness)])
+                witnesses += utils.pack_size(len(inp.witness), increased_separator=True)
                 witnesses += inp.witness.to_bytes(segwit=True)
 
         return b''.join([
             self.version,
             b'\x00\x01' if has_segwit else b'',
-            inps_len,
+            inps_count,
             inps,
-            outs_len,
+            outs_count,
             outs,
             witnesses,
             self.locktime
         ])
 
-    @classmethod
-    def deserialize(cls, tx_hex: str) -> Transaction:  # todo
-        return ...
-
     def serialize(self) -> str:
         return self.stream().hex()
 
-    def get_id(self) -> str:
-        return get_2sha256(self.stream()).hex()[::-1]
+    @classmethod
+    def deserialize(cls, tx_hex: str, *, as_dict: bool = True) -> dict | Transaction:
+        """
+        :param tx_hex: Transaction raw hex. 
+        :param as_dict: Return a dict (if True) or a transaction object (if False).
+                        For the Transaction object,  will need to receive all input transactions
+                        (for this, need to connect to the blockchain APIs!), It will give the
+                        calculations of the fee and the amount of inputs (they are required for the
+                        transaction object)
+        :return: dict or Transaction
+        """
+        tx_dict = _TransactionDeserializer(tx_hex).deserialize()
+
+        if as_dict:
+            return tx_dict
+
+        # convert dict inputs to Input objects
+        inputs = []
+        for inp_dict in tx_dict['inputs']:
+            tx_hex = NetworkAPI.get_transaction_by_id(inp_dict['tx_id'])
+            inp_tx = _TransactionDeserializer(tx_hex).deserialize()
+
+            inp_out = inp_tx['outputs'][inp_dict['out_index']]
+            inp_script_pub_key, inp_amount = inp_out['script_pub_key'], inp_out['amount']
+
+            inp_instance = Input(
+                inp_dict['tx_id'],
+                inp_dict['out_index'],
+                inp_amount,
+                address=from_script_pub_key(inp_script_pub_key),
+                sequence=inp_dict['sequence'].to_bytes(4, 'little')
+            )
+            inp_instance.script_sig = Script.from_raw(inp_dict['script_sig'])
+            inp_instance.witness = Script.from_raw(inp_dict.get('witness', ''), segwit=True)
+
+            inputs.append(inp_instance)
+
+        # convert dict outputs to Output objects
+        outputs = []
+        for out_dict in tx_dict['outputs']:
+            outputs.append(Output(from_script_pub_key(out_dict['script_pub_key']), out_dict['amount']))
+
+        tx_args = {
+            'inputs': inputs,
+            'outputs': outputs,
+            'fee': sum(inp.amount for inp in inputs) - sum(out.amount for out in outputs),
+            'version': tx_dict['version'].to_bytes(4, 'little'),
+            'locktime': tx_dict['locktime'].to_bytes(4, 'little')
+        }
+        return Transaction(**tx_args)
