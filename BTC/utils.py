@@ -3,7 +3,37 @@ from hashlib import sha256
 from decimal import Decimal
 
 import bech32
-from const import PREFIXES
+from const import PREFIXES, SEPARATORS
+
+
+def split_size(raw_data: bytes, endian: str = 'little',
+               *, increased_separator: bool = False) -> tuple[int, bytes]:
+    """
+    Decoding size-int, return tuple[size, raw_data[size:]].
+
+    Example raw_data:
+
+             fdc003/4dc003          fc2ed1a0fc2ed1a0fc2ed1a0fc2ed1a0 * 60
+     <segwit/non-segwit data size>                <data>
+
+     return   ->    (int(fdc003/4dc003)  ,   fc2ed1a0fc2ed1a0fc2ed1a0fc2ed1a0 * 60
+                <segwit-non-segwit int size>          <raw_data[size:]>
+
+    """
+    # pop fist byte
+    first_byte = raw_data[0:1]
+    first_byte_int = first_byte[0]
+    raw_data = raw_data[1:]
+
+    if first_byte_int > 78:
+        increased_separator = True
+
+    if first_byte_int < (253 if increased_separator else 76):
+        return first_byte_int, raw_data
+
+    data_start = SEPARATORS['increased' if increased_separator else 'default'][first_byte]
+    data_size = bytes2int(raw_data[:data_start], endian)
+    return data_size, raw_data[data_start:]
 
 
 def int2bytes(value: int, endian: str = 'big') -> bytes:
@@ -12,13 +42,13 @@ def int2bytes(value: int, endian: str = 'big') -> bytes:
     return data if endian == 'big' else data[::-1]
 
 
-def bytes2int(value: bytes, endian: str = 'big') -> int:
+def bytes2int(value: bytes, endian: str = 'big') -> int:  # value must be in big endian
     bytes_ = value if endian == 'big' else value[::-1]
     return int(bytes_.hex(), 16)
 
 
-def get_2sha256(bytes_: bytes) -> bytes:
-    return sha256(sha256(bytes_).digest()).digest()
+def get_2sha256(data: bytes) -> bytes:
+    return sha256(sha256(data).digest()).digest()
 
 
 def get_address_network(address: str) -> str:
@@ -60,7 +90,7 @@ def validate_address(address: str, address_type: str, address_network: str) -> b
         try:
             address_bytes = b58decode(address.encode('utf-8'))
             address_checksum = address_bytes[-4:]
-            address_hash = sha256(sha256(address_bytes[:-4]).digest()).digest()
+            address_hash = get_2sha256(address_bytes[:-4])
         except:
             return False
 
