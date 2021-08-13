@@ -23,6 +23,18 @@ SEPARATORS = {
         b'\xff': 8
     }
 }
+SEPARATORS_REVERSED = {
+    'default': {
+        1: b'\x4c',
+        2: b'\x4d',
+        4: b'\x4e'
+    },
+    'increased': {
+        2: b'\xfd',
+        4: b'\xfe',
+        8: b'\xff'
+    }
+}
 
 PREFIXES = {
     'wif': {

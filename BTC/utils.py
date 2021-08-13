@@ -3,7 +3,27 @@ from hashlib import sha256
 from decimal import Decimal
 
 import bech32
-from const import PREFIXES, SEPARATORS
+from const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED
+
+
+def pack_size(size: int, endian: str = 'little', *, increased_separator: bool):
+    size_bytes = int2bytes(size, endian)
+
+    if size < (253 if increased_separator else 76):
+        return size_bytes
+
+    size_length = len(size_bytes)
+
+    if size_length > (8 if increased_separator else 4):
+        raise ValueError(f'script data size too much ({size}, increased_separator={increased_separator})')
+
+    first_byte = b''
+    for new_size, value in SEPARATORS_REVERSED['increased' if increased_separator else 'default'].items():
+        if size_length <= new_size:
+            size_length, first_byte = new_size, value
+            break
+
+    return first_byte + size.to_bytes(size_length, endian)
 
 
 def split_size(raw_data: bytes, endian: str = 'little',
