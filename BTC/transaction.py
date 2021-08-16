@@ -9,7 +9,7 @@ from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES
 from utils import get_2sha256
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
-from services import Unspent
+from services import Unspent, NetworkAPI
 import exceptions
 
 
@@ -422,6 +422,25 @@ class Transaction(SupportsDumps, SupportsSerialize):
 
     def has_segwit_input(self) -> bool:
         return any([not inp.witness.is_empty() for inp in self.inputs])
+
+    def set_amounts(self, tx_network: str):
+        """
+        Set self.amount and self.fee, for it may need connect to
+        Bitcoin Blockchain APIs (if one in inputs have Input.amount = None).
+        Also set Input.amount, if before he was None.
+        """
+        amount = 0
+        for inp in self.inputs:
+
+            if inp.amount is None:
+                api = getattr(NetworkAPI, 'get_transaction_by_id' + ('_testnet' if tx_network == 'testnet' else ''))
+                inp_tx = Transaction.deserialize(api(inp.tx_id))
+                inp.amount = inp_tx.outputs[inp.out_index].amount
+
+            amount += inp.amount
+
+        self.amount = amount
+        self.fee = amount - sum(out.amount for out in self.outputs)
 
     def get_id(self) -> str:
         return get_2sha256(self.serialize(return_bytes=False)).hex()[::-1]
