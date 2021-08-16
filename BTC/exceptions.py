@@ -87,6 +87,11 @@ class SighashSingleRequiresInputAndOutputWithSameIndexes(exc):
           'that index do not exists'
 
 
+class SegwitHash4SignRequiresInputAmount(exc):
+    cls = TypeError
+    msg = 'for Transaction.get_hash4sign(input_index, ..., segwit=True) requires Input.amount is not None'
+
+
 class ForDefaultSignPrivateKeyMustBeSet(exc):
     cls = ValueError
     msg = 'for Input.default_sign() need set Input.pv = PrivateKey()'
