@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import Iterable
+
+import exceptions
 from const import OP_CODES, CODE_OPS
 from utils import dint
 
@@ -23,18 +25,18 @@ class Script:
 
                 if not item.startswith('OP_'):
                     if len(item) % 2 != 0:
-                        raise ValueError('hex expected, his length multiple of two')
+                        raise exceptions.HexLengthMustBeMultipleTwo
 
                     try:
                         bytes.fromhex(item)
                     except ValueError:
-                        raise ValueError(f'hex or opcode (OP_<...>) expected, but \'{item}\' received') from None
+                        raise exceptions.InvalidHexOrOpcode(item) from None
 
             elif isinstance(item, bytes):
                 item = item.hex()
 
             else:
-                raise TypeError(f'args type must be str, bytes or int, but {type(item)} received') from None
+                raise exceptions.InvalidInputScriptData(type(item)) from None
 
             _data.append(item)
 

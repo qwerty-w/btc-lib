@@ -53,6 +53,16 @@ class InvalidScriptPubKey(exc):
     msg = 'invalid script_pub_key - {}'
 
 
+class InvalidHexOrOpcode(exc):
+    cls = ValueError
+    msg = 'hex or opcode (OP_<...>) expected, but \'{}\' received'
+
+
+class InvalidInputScriptData(exc):
+    cls = TypeError
+    msg = 'args type must be str, bytes or int, but {} received'
+
+
 class UnsupportedAddressType(exc):
     cls = TypeError
     msg = 'unsupported type {}, supported only P2PKH, P2SH (P2SH-P2WPKH), P2WPKH, P2WSH'
@@ -110,3 +120,8 @@ class FailedToGetTransactionData(exc):
 class IntSizeGreaterThanMaxSize(exc):
     cls = OverflowError
     msg = 'received int ({}) is greater than the max size ({} bytes)'
+
+
+class HexLengthMustBeMultipleTwo(exc):
+    cls = ValueError
+    msg = 'hex expected, his length multiple of two'
