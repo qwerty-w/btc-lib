@@ -3,13 +3,15 @@
 MAX_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
-DEFAULT_VERSION = b'\x02\x00\x00\x00'
-DEFAULT_LOCKTIME = b'\x00\x00\x00\x00'
+DEFAULT_VERSION = 2
+DEFAULT_LOCKTIME = 0
 DEFAULT_WITNESS_VERSION = 0
-DEFAULT_SEQUENCE = b'\xff\xff\xff\xff'
+DEFAULT_SEQUENCE = 4294967295
 DEFAULT_NETWORK = 'mainnet'
 
-EMPTY_SEQUENCE = b'\x00\x00\x00\x00'
+EMPTY_SEQUENCE = 0
+
+NEGATIVE_SATOSHI = -1
 
 SEPARATORS = {
     'default': {

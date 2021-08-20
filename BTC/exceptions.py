@@ -100,3 +100,13 @@ class ForDefaultSignPrivateKeyMustBeSet(exc):
 class ForDefaultSignAddressMustBeSet(exc):
     cls = ValueError
     msg = 'for Input.default_sign() need set Input.address = BitcoinAddress()'
+
+
+class FailedToGetTransactionData(exc):
+    cls = ConnectionError
+    msg = 'failed to get transaction {} data'
+
+
+class IntSizeGreaterThanMaxSize(exc):
+    cls = OverflowError
+    msg = 'received int ({}) is greater than the max size ({} bytes)'

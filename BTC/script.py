@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Iterable
 from const import OP_CODES, CODE_OPS
-import utils
+from utils import dint
 
 
 class Script:
@@ -56,7 +56,7 @@ class Script:
                 item, item_size = op, 1
 
             else:
-                item_size, data = utils.split_size(data, increased_separator=segwit)
+                item_size, data = dint.unpack(data, increased_separator=segwit)
                 item = data[:item_size]
 
                 # if <opcode size> <opcode> <data>
@@ -89,7 +89,7 @@ class Script:
                 continue
 
             item = bytes.fromhex(item)
-            serialized_data += utils.pack_size(len(item), increased_separator=segwit) + item
+            serialized_data += dint(len(item)).pack(increased_separator=segwit) + item
 
         return serialized_data
 
