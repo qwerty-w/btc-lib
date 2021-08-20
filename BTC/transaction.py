@@ -4,9 +4,8 @@ from abc import ABC, abstractmethod
 from typing import Iterable
 import json
 
-import utils
-from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE
-from utils import get_2sha256
+from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
+from utils import get_2sha256, uint32, uint64, sint64, dint
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
 from services import Unspent, NetworkAPI
@@ -35,7 +34,7 @@ class SupportsSerialize(ABC):
 
 class Input(SupportsDumps, SupportsSerialize):
     def __init__(self, tx_id: str, out_index: int, amount: int | None = None, pv: PrivateKey | None = None,
-                 address: BitcoinAddress | None = None, sequence: bytes = DEFAULT_SEQUENCE):
+                 address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -49,9 +48,9 @@ class Input(SupportsDumps, SupportsSerialize):
         self.address = address
 
         self.tx_id = tx_id
-        self.out_index = out_index
-        self.amount = amount
-        self.sequence = sequence
+        self.out_index = uint32(out_index)
+        self.amount = uint64(amount) if amount is not None else amount
+        self.sequence = uint32(sequence)
 
         self.script_sig = Script()
         self.witness = Script()
@@ -65,7 +64,7 @@ class Input(SupportsDumps, SupportsSerialize):
         if self.address:
             args['address'] = self.address
         if self.sequence != DEFAULT_SEQUENCE:
-            args['sequence'] = utils.bytes2int(self.sequence, 'little')
+            args['sequence'] = self.sequence
 
         return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
 
@@ -84,7 +83,7 @@ class Input(SupportsDumps, SupportsSerialize):
         if witness and not self.witness.is_empty():
             items.append(('witness', self.witness.to_hex()))
 
-        items.append(('sequence', utils.bytes2int(self.sequence, 'little')))
+        items.append(('sequence', self.sequence))
         return dict(items)
 
     def as_json(self, *, indent: int = None, **kwargs) -> str:
@@ -92,8 +91,8 @@ class Input(SupportsDumps, SupportsSerialize):
 
     @classmethod
     def from_unspent(cls, unspent: Unspent, pv: PrivateKey | None = None,
-                     address: BitcoinAddress | None = None, sequence: bytes = DEFAULT_SEQUENCE) -> Input:
-        return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence=sequence)
+                     address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE) -> Input:
+        return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence)
 
     def copy(self) -> Input:
         instance = Input(
@@ -102,7 +101,7 @@ class Input(SupportsDumps, SupportsSerialize):
             self.amount,
             self.pv,
             self.address,
-            sequence=self.sequence,
+            self.sequence,
         )
         instance.script_sig = self.script_sig
         instance.witness = self.witness
@@ -122,18 +121,18 @@ class Input(SupportsDumps, SupportsSerialize):
         try:
             index = tx.inputs.index(self)
         except ValueError:
-            raise ValueError(f'received tx has no input {repr(self)}')
+            raise ValueError(f'received tx has no input {repr(self)}') from None
 
         if isinstance(self.address, P2WSH):
             witness_script = Script('OP_1', self.pub.hex, 'OP_1', 'OP_CHECKMULTISIG')
-            hash4sign = tx.get_hash4sign(index, witness_script, True)
+            hash4sign = tx.get_hash4sign(index, witness_script, segwit=True)
             sig = self.pv.sign_tx(hash4sign)
             self.witness = Script('OP_0', sig, witness_script.to_hex())
 
             return
 
         script4hash = Script('OP_DUP', 'OP_HASH160', self.pub.hash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
-        hash4sign = tx.get_hash4sign(index, script4hash, False if isinstance(self.address, P2PKH) else True)
+        hash4sign = tx.get_hash4sign(index, script4hash, segwit=False if isinstance(self.address, P2PKH) else True)
         sig = Script(self.pv.sign_tx(hash4sign), self.pub.hex)
 
         if isinstance(self.address, P2PKH):
@@ -157,55 +156,66 @@ class Input(SupportsDumps, SupportsSerialize):
         self.witness = witness if witness is not None else Script()
 
     def serialize(self) -> bytes:
-        tx_id = bytes.fromhex(self.tx_id)[::-1]
-        index = self.out_index.to_bytes(4, 'little')
         sig = self.script_sig.to_bytes()
-        sig_size = utils.pack_size(len(sig), increased_separator=True)
+        sig_size = dint(len(sig)).pack(increased_separator=True)
 
         return b''.join([
-            tx_id,
-            index,
+            bytes.fromhex(self.tx_id)[::-1],
+            self.out_index.pack(),
             sig_size,
             sig,
-            self.sequence
+            self.sequence.pack()
         ])
 
 
 class Output(SupportsDumps, SupportsSerialize):
-    def __init__(self, address: BitcoinAddress | Script, amount: int):
-        self.address = address if isinstance(address, BitcoinAddress) else from_script_pub_key(address)
-        self.amount = amount
+    def __init__(self, address_or_script_pub_key: BitcoinAddress | Script | str, amount: int):
+        instance = address_or_script_pub_key
+
+        if not isinstance(instance, BitcoinAddress):
+            try:
+                instance = from_script_pub_key(instance)
+            except:
+                instance = instance if isinstance(instance, Script) else Script.from_raw(instance)
+
+        self.address = instance if isinstance(instance, BitcoinAddress) else None
+        self.script_pub_key = self.address.script_pub_key if isinstance(instance, BitcoinAddress) else instance
+        self.amount = uint64(amount) if amount >= 0 else sint64(amount)
 
     def __repr__(self):
-        args = {
-            'address': self.address,
-            'amount': self.amount
-        }
+        args = dict([
+            ('script_pub_key', self.script_pub_key) if self.address is None else ('address', self.address),
+            ('amount', self.amount)
+        ])
         return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
 
     def as_dict(self, *, address_as_script: bool = False) -> dict:
-        return dict([
-            ('address', self.address.string)
-            if not address_as_script else
-            ('script', self.address.script_pub_key.to_hex()),
-            ('amount', self.amount)
-        ])
+        dict_ = {}
+
+        if self.address is not None and not address_as_script:
+            dict_['address'] = self.address.string
+
+        else:
+            dict_['script_pub_key'] = self.script_pub_key.to_hex()
+
+        dict_['amount'] = self.amount
+        return dict_
 
     def as_json(self, *, indent: int | None = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Output:
         return Output(
-            self.address,
+            self.script_pub_key,
             self.amount
         )
 
     def serialize(self) -> bytes:
-        script_pub_key = self.address.script_pub_key.to_bytes()
-        script_pub_key_size = utils.pack_size(len(script_pub_key), increased_separator=True)
+        script_pub_key = self.script_pub_key.to_bytes()
+        script_pub_key_size = dint(len(script_pub_key)).pack(increased_separator=True)
 
         return b''.join([
-            self.amount.to_bytes(8, 'little'),
+            self.amount.pack(),
             script_pub_key_size,
             script_pub_key,
         ])
@@ -216,7 +226,7 @@ class _Hash4SignGenerator:  # hash for sign
         self.tx = tx
         self.index = input_index
         self.script4hash = script4hash  # script for hash for sign
-        self.sighash = sighash
+        self.sighash = uint32(sighash)
 
     def get_default(self) -> bytes:
         tx = self.tx.copy()
@@ -231,7 +241,7 @@ class _Hash4SignGenerator:  # hash for sign
 
             for n, _ in enumerate(tx.inputs):
                 if n != self.index:
-                    tx.inputs[n].sequence = EMPTY_SEQUENCE
+                    tx.inputs[n].sequence = uint32(EMPTY_SEQUENCE)
 
         elif (self.sighash & 0x1f) == SIGHASHES['single']:
 
@@ -240,16 +250,16 @@ class _Hash4SignGenerator:  # hash for sign
             except IndexError:
                 raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
 
-            tx.outputs = tuple(Output(Script(), -1) for _ in range(self.index)) + (out,)
+            tx.outputs = tuple(Output(Script(), NEGATIVE_SATOSHI) for _ in range(self.index)) + (out,)
 
             for n, inp in enumerate(tx.inputs):
                 if n != self.index:
-                    inp.sequence = EMPTY_SEQUENCE
+                    inp.sequence = uint32(EMPTY_SEQUENCE)
 
         if self.sighash & SIGHASHES['anyonecanpay']:
             tx.inputs = (tx.inputs[self.index])
 
-        serialized = tx.serialize(return_bytes=True, exclude_witnesses=True) + self.sighash.to_bytes(4, 'little')
+        serialized = tx.serialize(return_bytes=True, exclude_witnesses=True) + self.sighash.pack()
         return get_2sha256(serialized)
 
     def get_segwit(self) -> bytes:
@@ -264,12 +274,12 @@ class _Hash4SignGenerator:  # hash for sign
         if not anyone:
             inps = b''
             for inp in tx.inputs:
-                inps += bytes.fromhex(inp.tx_id)[::-1] + inp.out_index.to_bytes(4, 'little')
+                inps += bytes.fromhex(inp.tx_id)[::-1] + inp.out_index.pack()
 
             if sign_all:
                 seq = b''
                 for inp in tx.inputs:
-                    seq += inp.sequence
+                    seq += inp.sequence.pack()
 
         if sign_all:
             outs = b''.join(out.serialize() for out in tx.outputs)
@@ -286,20 +296,22 @@ class _Hash4SignGenerator:  # hash for sign
         inps, seq, outs = get_2sha256(inps), get_2sha256(seq), get_2sha256(outs)
 
         main_inp = bytes.fromhex(tx.inputs[self.index].tx_id)[::-1]
-        main_inp += tx.inputs[self.index].out_index.to_bytes(4, 'little')
-        main_inp_seq = tx.inputs[self.index].sequence
+        main_inp += tx.inputs[self.index].out_index.pack()
+        main_inp_seq = tx.inputs[self.index].sequence.pack()
 
         script4hash = self.script4hash.to_bytes()
-        script4hash_size = utils.pack_size(len(script4hash), increased_separator=True)
+        script4hash_size = dint(len(script4hash)).pack(increased_separator=True)
 
         if tx.inputs[self.index].amount is None:
             raise exceptions.SegwitHash4SignRequiresInputAmount
 
-        amount = tx.inputs[self.index].amount.to_bytes(8, 'little')
-        sighash = self.sighash.to_bytes(4, 'little')
+        ver = tx.version.pack()
+        locktime = tx.locktime.pack()
+        amount = tx.inputs[self.index].amount.pack()
+        sighash = self.sighash.pack()
 
         raw_tx = b''.join([
-            tx.version,
+            ver,
             inps,
             seq,
             main_inp,
@@ -308,7 +320,7 @@ class _Hash4SignGenerator:  # hash for sign
             amount,
             main_inp_seq,
             outs,
-            tx.locktime,
+            locktime,
             sighash
         ])
 
@@ -336,7 +348,7 @@ class _TransactionDeserializer:
         return data
 
     def pop_size(self) -> int:
-        size, self.raw = utils.split_size(self.raw, increased_separator=True)
+        size, self.raw = dint.unpack(self.raw, increased_separator=True)
         return size
 
     def deserialize(self) -> dict[str, str | int | list[dict]]:
@@ -344,8 +356,8 @@ class _TransactionDeserializer:
         data = {
             'inputs': [],
             'outputs': [],
-            'version': utils.bytes2int(self.pop(4), 'little'),
-            'locktime': utils.bytes2int(self.pop(-4), 'little')
+            'version': uint32.unpack(self.pop(4)),
+            'locktime': uint32.unpack(self.pop(-4))
         }
 
         if segwit:
@@ -356,15 +368,15 @@ class _TransactionDeserializer:
         for _ in range(inps_count):
             data['inputs'].append({
                 'tx_id': self.pop(32)[::-1].hex(),
-                'out_index': utils.bytes2int(self.pop(4), 'little'),
+                'out_index': uint32.unpack(self.pop(4)),
                 'script_sig': Script.from_raw(self.pop(self.pop_size())).to_hex(),
-                'sequence': utils.bytes2int(self.pop(4), 'little')
+                'sequence': uint32.unpack(self.pop(4))
             })
 
         # outputs
         outs_count = self.pop_size()
         for _ in range(outs_count):
-            amount = utils.bytes2int(self.pop(8), 'little')
+            amount = uint64.unpack(self.pop(8))
             data['outputs'].append({
                 'script_pub_key': self.pop(self.pop_size()).hex(),
                 'amount': amount
@@ -388,12 +400,12 @@ class _TransactionDeserializer:
 
 class Transaction(SupportsDumps, SupportsSerialize):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
-                 version: bytes = DEFAULT_VERSION, locktime: bytes = DEFAULT_LOCKTIME):
+                 version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
 
         self.inputs = tuple(inputs)
         self.outputs = tuple(outputs)
-        self.version = version
-        self.locktime = locktime
+        self.version = uint32(version)
+        self.locktime = uint32(locktime)
         self.amount = sum(values) if None not in (values := [inp.amount for inp in self.inputs]) else None
         self.fee = self.amount - sum(out.amount for out in self.outputs) if self.amount is not None else None
 
@@ -406,8 +418,8 @@ class Transaction(SupportsDumps, SupportsSerialize):
             'inputs': [inp.as_dict(address=inp_address, script=scripts, witness=witnesses) for inp in self.inputs],
             'outputs': [out.as_dict(address_as_script=out_address_as_script) for out in self.outputs],
             'fee': self.fee if self.fee is not None else '<unknown>',
-            'version': utils.bytes2int(self.version, 'little'),
-            'locktime': utils.bytes2int(self.locktime)
+            'version': self.version,
+            'locktime': self.locktime
         }
 
     def as_json(self, *, indent: int | None = None, **kwargs) -> str:
@@ -417,7 +429,8 @@ class Transaction(SupportsDumps, SupportsSerialize):
         return Transaction(
             [inp.copy() for inp in self.inputs],
             [out.copy() for out in self.outputs],
-            locktime=self.locktime
+            self.version,
+            self.locktime
         )
 
     def has_segwit_input(self) -> bool:
@@ -434,8 +447,13 @@ class Transaction(SupportsDumps, SupportsSerialize):
 
             if inp.amount is None:
                 api = getattr(NetworkAPI, 'get_transaction_by_id' + ('_testnet' if tx_network == 'testnet' else ''))
-                inp_tx = Transaction.deserialize(api(inp.tx_id))
-                inp.amount = inp_tx.outputs[inp.out_index].amount
+                inp_tx_hex = api(inp.tx_id)
+
+                if inp_tx_hex is None:
+                    raise exceptions.FailedToGetTransactionData(inp.tx_id)
+
+                inp_tx = Transaction.deserialize(inp_tx_hex)
+                inp.amount = uint64(inp_tx.outputs[inp.out_index].amount)
 
             amount += inp.amount
 
@@ -445,7 +463,7 @@ class Transaction(SupportsDumps, SupportsSerialize):
     def get_id(self) -> str:
         return get_2sha256(self.serialize(return_bytes=False)).hex()[::-1]
 
-    def get_hash4sign(self, input_index: int, script4hash: Script,
+    def get_hash4sign(self, input_index: int, script4hash: Script, *,
                       segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
         """
         :param input_index:
@@ -462,40 +480,12 @@ class Transaction(SupportsDumps, SupportsSerialize):
         for inp in self.inputs:
             inp.default_sign(self)
 
-    def serialize(self, *, return_bytes: bool = False, exclude_witnesses: bool = False) -> str | bytes:
-        has_segwit = False if exclude_witnesses else self.has_segwit_input()
-
-        inps_count = utils.pack_size(len(self.inputs), increased_separator=True)
-        inps = b''
-        for inp in self.inputs:
-            inps += inp.serialize()
-
-        outs_count = utils.pack_size(len(self.outputs), increased_separator=True)
-        outs = b''
-        for out in self.outputs:
-            outs += out.serialize()
-
-        witnesses = b''
-        if has_segwit:
-            for inp in self.inputs:
-                witnesses += utils.pack_size(len(inp.witness), increased_separator=True)
-                witnesses += inp.witness.to_bytes(segwit=True)
-
-        serialized_tx = b''.join([
-            self.version,
-            b'\x00\x01' if has_segwit else b'',
-            inps_count,
-            inps,
-            outs_count,
-            outs,
-            witnesses,
-            self.locktime
-        ])
-        return serialized_tx.hex() if not return_bytes else serialized_tx
-
     @classmethod
-    def deserialize(cls, tx_hex: str) -> Transaction:
+    def deserialize(cls, tx_hex: str, *, to_dict: bool = False) -> dict | Transaction:
         tx_dict = _TransactionDeserializer(tx_hex).deserialize()
+
+        if to_dict:
+            return tx_dict
 
         # convert dict inputs to Input objects
         inputs = []
@@ -503,7 +493,7 @@ class Transaction(SupportsDumps, SupportsSerialize):
             inp_instance = Input(
                 inp_dict['tx_id'],
                 inp_dict['out_index'],
-                sequence=inp_dict['sequence'].to_bytes(4, 'little')
+                sequence=inp_dict['sequence']
             )
             inp_instance.script_sig = Script.from_raw(inp_dict['script_sig'])
             inp_instance.witness = Script.from_raw(inp_dict.get('witness', ''), segwit=True)
@@ -513,12 +503,43 @@ class Transaction(SupportsDumps, SupportsSerialize):
         # convert dict outputs to Output objects
         outputs = []
         for out_dict in tx_dict['outputs']:
-            outputs.append(Output(from_script_pub_key(out_dict['script_pub_key']), out_dict['amount']))
+            outputs.append(Output(out_dict['script_pub_key'], out_dict['amount']))
 
         tx_args = {
             'inputs': inputs,
             'outputs': outputs,
-            'version': tx_dict['version'].to_bytes(4, 'little'),
-            'locktime': tx_dict['locktime'].to_bytes(4, 'little')
+            'version': tx_dict['version'],
+            'locktime': tx_dict['locktime']
         }
         return Transaction(**tx_args)
+
+    def serialize(self, *, return_bytes: bool = False, exclude_witnesses: bool = False) -> str | bytes:
+        has_segwit = False if exclude_witnesses else self.has_segwit_input()
+
+        inps_count = dint(len(self.inputs)).pack(increased_separator=True)
+        inps = b''
+        for inp in self.inputs:
+            inps += inp.serialize()
+
+        outs_count = dint(len(self.outputs)).pack(increased_separator=True)
+        outs = b''
+        for out in self.outputs:
+            outs += out.serialize()
+
+        witnesses = b''
+        if has_segwit:
+            for inp in self.inputs:
+                witnesses += dint(len(inp.witness)).pack(increased_separator=True)
+                witnesses += inp.witness.to_bytes(segwit=True)
+
+        serialized_tx = b''.join([
+            self.version.pack(),
+            b'\x00\x01' if has_segwit else b'',  # segwit mark
+            inps_count,
+            inps,
+            outs_count,
+            outs,
+            witnesses,
+            self.locktime.pack()
+        ])
+        return serialized_tx.hex() if not return_bytes else serialized_tx
