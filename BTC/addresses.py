@@ -165,6 +165,11 @@ class BitcoinAddress(ABC):
     def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
         ...
 
+    def change_network(self, network: str | None = None) -> BitcoinAddress:
+        cls = type(self)
+        network = network if network is not None else ('mainnet' if self.network == 'testnet' else 'testnet')
+        return cls.from_hash(self.hash, network)
+
     def get_info(self) -> dict:
         return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
@@ -211,7 +216,7 @@ class P2PKH(DefaultAddress):
 
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2PKH:
-        return cls(cls._b58encode(bytes.fromhex(pub.get_hash160()), network))
+        return cls.from_hash(pub.get_hash160(), network)
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
@@ -225,7 +230,7 @@ class P2SH(DefaultAddress):
         ripemd160 = hashlib_new('ripemd160')
         ripemd160.update(sha256(Script('OP_0', pub.get_hash160()).to_bytes()).digest())
 
-        return cls(cls._b58encode(ripemd160.digest(), network))
+        return cls.from_hash(ripemd160.digest().hex(), network)
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
@@ -263,7 +268,7 @@ class P2WPKH(SegwitAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WPKH:
-        return cls(cls._bech32encode(bytes.fromhex(pub.get_hash160()), network, version))
+        return cls.from_hash(pub.get_hash160(), network, version)
 
 
 class P2WSH(SegwitAddress):
@@ -273,8 +278,8 @@ class P2WSH(SegwitAddress):
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WSH:
         witness_script = Script('OP_1', pub.to_hex(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
-        hash_sha256 = sha256(witness_script).digest()
-        return cls(cls._bech32encode(hash_sha256, network, version))
+        hash_sha256 = sha256(witness_script).digest().hex()
+        return cls.from_hash(hash_sha256, network, version)
 
 
 def get_address(address: str) -> BitcoinAddress:
