@@ -79,7 +79,6 @@ class Script:
         serialized_data = b''
 
         for item in self.script:
-
             if item in ('00', 'OP_0'):
                 serialized_data += b'\x00'
                 continue

@@ -124,16 +124,16 @@ class Input(SupportsDumps, SupportsSerialize):
             raise ValueError(f'received tx has no input {repr(self)}') from None
 
         if isinstance(self.address, P2WSH):
-            witness_script = Script('OP_1', self.pub.hex, 'OP_1', 'OP_CHECKMULTISIG')
+            witness_script = Script('OP_1', self.pub.to_hex(), 'OP_1', 'OP_CHECKMULTISIG')
             hash4sign = tx.get_hash4sign(index, witness_script, segwit=True)
             sig = self.pv.sign_tx(hash4sign)
             self.witness = Script('OP_0', sig, witness_script.to_hex())
 
             return
 
-        script4hash = Script('OP_DUP', 'OP_HASH160', self.pub.hash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        script4hash = Script('OP_DUP', 'OP_HASH160', self.pub.get_hash160(), 'OP_EQUALVERIFY', 'OP_CHECKSIG')
         hash4sign = tx.get_hash4sign(index, script4hash, segwit=False if isinstance(self.address, P2PKH) else True)
-        sig = Script(self.pv.sign_tx(hash4sign), self.pub.hex)
+        sig = Script(self.pv.sign_tx(hash4sign), self.pub.to_hex())
 
         if isinstance(self.address, P2PKH):
             self.script_sig = sig
@@ -142,7 +142,7 @@ class Input(SupportsDumps, SupportsSerialize):
             if self.pub.get_address('P2SH-P2WPKH', self.address.network).string != self.address.string:
                 raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
 
-            self.script_sig = Script(Script('OP_0', self.pub.hash160).to_hex())
+            self.script_sig = Script(Script('OP_0', self.pub.get_hash160()).to_hex())
             self.witness = sig
 
         elif isinstance(self.address, P2WPKH):

@@ -36,7 +36,7 @@ class PrivateKey:
 
         return SigningKey.from_string(key, curve=SECP256k1)
 
-    def to_wif(self, *, network: str = DEFAULT_NETWORK, compressed: bool = True) -> str:
+    def to_wif(self, network: str = DEFAULT_NETWORK, *, compressed: bool = True) -> str:
         data = PREFIXES['wif'][network] + self.key.to_string() + (b'\x01' if compressed else b'')
         h = get_2sha256(data)
         checksum = h[0:4]
@@ -106,19 +106,18 @@ class PublicKey:
 
             self.key = VerifyingKey.from_string(uncompressed_hex_b, curve=SECP256k1)
 
-        self.hex = self._to_hex()
         self.bytes = self.key.to_string()
-        self.hash160 = self._get_hash160()
 
-    def _get_hash160(self) -> str:
-        h = sha256(bytes.fromhex(self.hex)).digest()
+    def get_hash160(self, *, compressed: bool = True) -> str:
+        h = sha256(bytes.fromhex(self.to_hex(compressed=compressed))).digest()
         ripemd160 = hashlib_new('ripemd160')
         ripemd160.update(h)
         return ripemd160.digest().hex()
 
-    def _to_hex(self) -> str:
-        key_hex = self.key.to_string().hex().encode()
-        return ((b'02' if int(key_hex[-2:], 16) % 2 == 0 else b'03') + key_hex[:64]).decode('utf-8')
+    def to_hex(self, *, compressed: bool = True) -> str:
+        key_hex = self.key.to_string().hex()
+        key_hex = (('02' if int(key_hex[-2:], 16) % 2 == 0 else '03') + key_hex[:64]) if compressed else '04' + key_hex
+        return key_hex
 
     def get_address(self, address_type: str | BitcoinAddress, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
 
@@ -212,7 +211,7 @@ class P2PKH(DefaultAddress):
 
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2PKH:
-        return cls(cls._b58encode(bytes.fromhex(pub.hash160), network))
+        return cls(cls._b58encode(bytes.fromhex(pub.get_hash160()), network))
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
@@ -224,7 +223,7 @@ class P2SH(DefaultAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
         ripemd160 = hashlib_new('ripemd160')
-        ripemd160.update(sha256(Script('OP_0', pub.hash160).to_bytes()).digest())
+        ripemd160.update(sha256(Script('OP_0', pub.get_hash160()).to_bytes()).digest())
 
         return cls(cls._b58encode(ripemd160.digest(), network))
 
@@ -264,7 +263,7 @@ class P2WPKH(SegwitAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WPKH:
-        return cls(cls._bech32encode(bytes.fromhex(pub.hash160), network, version))
+        return cls(cls._bech32encode(bytes.fromhex(pub.get_hash160()), network, version))
 
 
 class P2WSH(SegwitAddress):
@@ -273,7 +272,7 @@ class P2WSH(SegwitAddress):
     @classmethod
     def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
                  version: int = DEFAULT_WITNESS_VERSION) -> P2WSH:
-        witness_script = Script('OP_1', pub.hex, 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
+        witness_script = Script('OP_1', pub.to_hex(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
         hash_sha256 = sha256(witness_script).digest()
         return cls(cls._bech32encode(hash_sha256, network, version))
 
