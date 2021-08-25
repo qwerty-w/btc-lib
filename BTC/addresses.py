@@ -119,20 +119,28 @@ class PublicKey:
         key_hex = (('02' if int(key_hex[-2:], 16) % 2 == 0 else '03') + key_hex[:64]) if compressed else '04' + key_hex
         return key_hex
 
-    def get_address(self, address_type: str | BitcoinAddress, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
+    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
 
-        cls = {
-            'P2PKH': P2PKH,
-            'P2SH-P2WPKH': P2SH,
-            'P2WPKH': P2WPKH,
-            'P2WSH': P2WSH
+        if address_type in ('P2PKH', 'P2WPKH'):
+            cls = {'P2PKH': P2PKH, 'P2WPKH': P2WPKH}.get(address_type)
+            hash_ = self.get_hash160()
 
-        }.get(address_type) if not isinstance(address_type, BitcoinAddress) else address_type
+        elif address_type == 'P2SH-P2WPKH':
+            cls = P2SH
 
-        if cls is None:
+            ripemd160 = hashlib_new('ripemd160')
+            ripemd160.update(sha256(Script('OP_0', self.get_hash160()).to_bytes()).digest())
+            hash_ = ripemd160.digest().hex()
+
+        elif address_type == 'P2WSH':
+            cls = P2WSH
+            witness_script = Script('OP_1', self.to_hex(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
+            hash_ = sha256(witness_script).digest().hex()
+
+        else:
             raise exceptions.UnsupportedAddressType(address_type)
 
-        return cls.from_pub(self, network)
+        return cls.from_hash(hash_, network)
 
 
 class BitcoinAddress(ABC):
@@ -156,10 +164,6 @@ class BitcoinAddress(ABC):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.__str__().__repr__()})'
-
-    @abstractmethod
-    def from_pub(self, pub: PublicKey, network: str, **kwargs) -> BitcoinAddress:
-        ...
 
     @abstractmethod
     def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
@@ -214,23 +218,12 @@ class DefaultAddress(BitcoinAddress, ABC):
 class P2PKH(DefaultAddress):
     type = 'P2PKH'
 
-    @classmethod
-    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2PKH:
-        return cls.from_hash(pub.get_hash160(), network)
-
     def _get_script_pub_key(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
 
 
 class P2SH(DefaultAddress):
     type = 'P2SH'
-
-    @classmethod
-    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK) -> P2SH:  # PublicKey -> P2SH-P2WPKH address
-        ripemd160 = hashlib_new('ripemd160')
-        ripemd160.update(sha256(Script('OP_0', pub.get_hash160()).to_bytes()).digest())
-
-        return cls.from_hash(ripemd160.digest().hex(), network)
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
@@ -265,21 +258,9 @@ class SegwitAddress(BitcoinAddress, ABC):
 class P2WPKH(SegwitAddress):
     type = 'P2WPKH'
 
-    @classmethod
-    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
-                 version: int = DEFAULT_WITNESS_VERSION) -> P2WPKH:
-        return cls.from_hash(pub.get_hash160(), network, version)
-
 
 class P2WSH(SegwitAddress):
     type = 'P2WSH'
-
-    @classmethod
-    def from_pub(cls, pub: PublicKey, network: str = DEFAULT_NETWORK,
-                 version: int = DEFAULT_WITNESS_VERSION) -> P2WSH:
-        witness_script = Script('OP_1', pub.to_hex(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
-        hash_sha256 = sha256(witness_script).digest().hex()
-        return cls.from_hash(hash_sha256, network, version)
 
 
 def get_address(address: str) -> BitcoinAddress:
