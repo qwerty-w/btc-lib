@@ -2,3 +2,4 @@ base58check~=1.0.2
 bit~=0.7.2
 ecdsa~=0.17.0
 sympy~=1.8
+pytest~=6.2.4
