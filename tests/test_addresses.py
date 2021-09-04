@@ -1,99 +1,70 @@
+import sys
+import json
 import pytest
 from addresses import *
 from collections import namedtuple
 
 
-_pvs_inf = [
-    (
-        'KyFfKRAJmKCX7kzfDkS9FUn4SWrHMK8t82XWvtkqPGN81WmffrLy',  # mainnet compressed
-        'cPcenLAACNtnHCTvcAFGcoH84k9h1mEaC4fz3KDLtP28GFquTCV7',  # testnet compressed
-        '5JH1XTKRR62hoqwJGaQNMVx4xAwDKCMpNyzDDfThR5PTWdvH8YP',   # mainnet uncompressed
-        '923e7C8y1K6qmuSatvJHE6W2bqHvUMu1ivrAJHpCkp8WHcwoREZ',   # testnet uncompressed
-        '3cada192b9679369525cac7a05b6055dac3b7760a8b8b37cb95e079648a84776',  # hex
-        '02ea2b8c6913c04593764bdf8e9ff4ae113a1db15c3f80629dac87c7f0acd853b5',  # pub hex compressed
-        '04ea2b8c6913c04593764bdf8e9ff4ae113a1db15c3f80629dac87c7f0acd853b'
-        '5502fefe2bb47f80a121b57c79013a7d8a539d3f55198aaa70d31c94597633854',  # pub hex uncompressed
-        'd11c29717053f4ec55445688f02e22e38502c443',  # pub hash160 compressed
-        'f5f3f59d207345dfcbd1d8e92efe063ed6fbe22f'  # pub hash160 uncompressed
+def load_pvs_inf() -> list:
+    with open('pvs_inf.json') as f:
+        data = json.load(f)
 
-    )
-]
+    for pv_inf in data:
+        pv_inf['bytes'] = bytes.fromhex(pv_inf['hex'])
+        pv_inf['pub']['bytes'] = bytes.fromhex(pv_inf['pub']['hex']['uncompressed'][2:])
 
-container = namedtuple('ListContainer', 'index data')
-pvs_inf = [
-    {
-        'wif': {
-            'compressed': {
-                'mainnet': d[0],
-                'testnet': d[1]
-            },
-            'uncompressed': {
-                'mainnet': d[2],
-                'testnet': d[3]
-            }
-        },
-        'hex': d[4],
-        'bytes': bytes.fromhex(d[4]),
-        'pub_bytes': bytes.fromhex(d[6][2:]),
-        'pub_hex': {
-            'compressed': d[5],
-            'uncompressed': d[6]
-        },
-        'pub_hash160': {
-            'compressed': d[7],
-            'uncompressed': d[8]
-        }
-    } for d in _pvs_inf
-]
+    return data
 
 
-class LoadPrivateKeys:
-    _pvs_cache = []
+pvs_inf = load_pvs_inf()
+pv_data = namedtuple('PrivateKeyData', 'inf instance pub')
+address_data = namedtuple('AddressData', 'inf instance pv')
 
-    def __init__(self):
-        pv_data = namedtuple('PrivateKeyData', 'inf pv pub')
-
-        for pv_inf in pvs_inf:
-            self._pvs_cache.append(pv_data(
-                pv_inf,
-                pv := PrivateKey(pv_inf['wif']['compressed']['mainnet']),
-                pv.pub
-            ))
-
-    def __iter__(self):
-        return iter(self._pvs_cache)
-
-
-pv_data_parametrize = pytest.mark.parametrize('pv_data', LoadPrivateKeys())
-compressed_parametrize = pytest.mark.parametrize('c_string, c_bool', [('compressed', True), ('uncompressed', False)])
+is_c = namedtuple('IsCompressed', 'string bool')
+compressed_parametrize = pytest.mark.parametrize('compressed', [is_c('uncompressed', False), is_c('compressed', True)])
 network_parametrize = pytest.mark.parametrize('network', ['mainnet', 'testnet'])
 
 
-@pv_data_parametrize
+@pytest.fixture(params=pvs_inf)
+def pv(request) -> pv_data:
+    pv_inf = request.param
+    return pv_data(pv_inf, pv := PrivateKey(pv_inf['wif']['compressed']['mainnet']), pv.pub)
+
+
+@pytest.fixture(params=['P2PKH', 'P2SH-P2WPKH', 'P2WPKH', 'P2WSH'])
+def address_type(request) -> str:
+    return request.param
+
+
+@pytest.fixture
+def address(pv, address_type) -> address_data:
+    return address_data(pv.inf[address_type], pv.pub.get_address(address_type), pv)
+
+
 class TestPrivateKey:
 
     @compressed_parametrize
     @network_parametrize
-    def test_private_key_creation(self, pv_data, c_string, c_bool, network):  # test PrivateKey._from_wif
-        pv = PrivateKey(pv_data.inf['wif'][c_string][network])
+    def test_private_key_creation(self, pv, compressed, network):  # test PrivateKey._from_wif
+        instance = PrivateKey(pv.inf['wif'][compressed.string][network])
 
-        assert pv.to_bytes() == pv_data.inf['bytes']
+        assert instance.to_bytes() == pv.inf['bytes']
 
     @compressed_parametrize
     @network_parametrize
-    def test_private_key_to_wif(self, pv_data, c_string, c_bool, network):
-        wif = pv_data.inf['wif'][c_string][network]
-        pv = PrivateKey(wif)
+    def test_private_key_to_wif(self, pv, compressed, network):
+        wif = pv.inf['wif'][compressed.string][network]
+        instance = PrivateKey(wif)
 
-        assert pv.to_wif(network, compressed=c_bool) == wif
+        assert instance.to_wif(network, compressed=compressed.bool) == wif
 
-    def test_pub_key_creation(self, pv_data):
-        assert pv_data.pub.bytes == pv_data.inf['pub_bytes']
-
-    @compressed_parametrize
-    def test_pub_key_to_hex(self, pv_data, c_string, c_bool):
-        assert pv_data.pub.to_hex(compressed=c_bool) == pv_data.inf['pub_hex'][c_string]
+    def test_pub_key_creation(self, pv):
+        assert pv.pub.bytes == pv.inf['pub']['bytes']
 
     @compressed_parametrize
-    def test_pub_key_hash160(self, pv_data, c_string, c_bool):
-        assert pv_data.pub.get_hash160(compressed=c_bool) == pv_data.inf['pub_hash160'][c_string]
+    def test_pub_key_to_hex(self, pv, compressed):
+        assert pv.pub.to_hex(compressed=compressed.bool) == pv.inf['pub']['hex'][compressed.string]
+
+    @compressed_parametrize
+    def test_pub_key_hash160(self, pv, compressed):
+        assert pv.pub.get_hash160(compressed=compressed.bool) == pv.inf['pub']['hash160'][compressed.string]
