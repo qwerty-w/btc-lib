@@ -68,3 +68,15 @@ class TestPrivateKey:
     @compressed_parametrize
     def test_pub_key_hash160(self, pv, compressed):
         assert pv.pub.get_hash160(compressed=compressed.bool) == pv.inf['pub']['hash160'][compressed.string]
+
+
+class TestAddresses:
+    def test_script_pub_key(self, address):
+        assert address.instance.script_pub_key.to_hex() == address.inf['script_pub_key']
+
+    @network_parametrize
+    def test_string(self, address, network):
+        assert address.instance.change_network(network).string == address.inf['string'][network]
+
+    def test_hash(self, address):
+        assert address.instance.hash == address.inf['hash']

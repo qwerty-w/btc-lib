@@ -20,6 +20,38 @@
                 "compressed": "d11c29717053f4ec55445688f02e22e38502c443",
                 "uncompressed": "f5f3f59d207345dfcbd1d8e92efe063ed6fbe22f"
             }
+        },
+        "P2PKH": {
+            "string": {
+                "mainnet": "1L4fxpFvyqTQhF1qAip9zrKB5zdvzETipf",
+                "testnet": "mzadFsLunrtfUMVStHnXpmXVwzEdp68pkr"
+            },
+            "script_pub_key": "76a914d11c29717053f4ec55445688f02e22e38502c44388ac",
+            "hash": "d11c29717053f4ec55445688f02e22e38502c443"
+        },
+        "P2SH-P2WPKH": {
+            "string": {
+                "mainnet": "3Q5hHvG4FGwAPL5KjmN4PNqfh8348dVjSA",
+                "testnet": "2NFduMfC5rjSWb7hsQtyw1KpvuUFDsaNdWy"
+            },
+            "script_pub_key": "a914f59cc81741697ffd2c747e9a77c8a41782daef9087",
+            "hash": "f59cc81741697ffd2c747e9a77c8a41782daef90"
+        },
+        "P2WPKH": {
+            "string": {
+                "mainnet": "bc1q6ywzjuts206wc42y26y0qt3zuwzs93zrfdsj49",
+                "testnet": "tb1q6ywzjuts206wc42y26y0qt3zuwzs93zrrttpwk"
+            },
+            "script_pub_key": "0014d11c29717053f4ec55445688f02e22e38502c443",
+            "hash": "d11c29717053f4ec55445688f02e22e38502c443"
+        },
+        "P2WSH": {
+            "string": {
+                "mainnet": "bc1q9gzc6y4jkdhljr4zru2kaxftgyarkhw076fjmwwtwvs7fgyt93sqatpdwa",
+                "testnet": "tb1q9gzc6y4jkdhljr4zru2kaxftgyarkhw076fjmwwtwvs7fgyt93sq2rhz5j"
+            },
+            "script_pub_key": "00202a058d12b2b36ff90ea21f156e992b413a3b5dcff6932db9cb7321e4a08b2c60",
+            "hash": "2a058d12b2b36ff90ea21f156e992b413a3b5dcff6932db9cb7321e4a08b2c60"
         }
     }
 ]
