@@ -31,16 +31,6 @@ def pv(request) -> pv_data:
     return pv_data(pv_inf, pv := PrivateKey(pv_inf['wif']['compressed']['mainnet']), pv.pub)
 
 
-@pytest.fixture(params=['P2PKH', 'P2SH-P2WPKH', 'P2WPKH', 'P2WSH'])
-def address_type(request) -> str:
-    return request.param
-
-
-@pytest.fixture
-def address(pv, address_type) -> address_data:
-    return address_data(pv.inf[address_type], pv.pub.get_address(address_type), pv)
-
-
 class TestPrivateKey:
 
     @compressed_parametrize
@@ -70,13 +60,34 @@ class TestPrivateKey:
         assert pv.pub.get_hash160(compressed=compressed.bool) == pv.inf['pub']['hash160'][compressed.string]
 
 
+@pytest.fixture(params=['P2PKH', 'P2SH-P2WPKH', 'P2WPKH', 'P2WSH'])
+def address_type(request) -> str:
+    return request.param
+
+
+@pytest.fixture(params=['hash', 'pub'])  # params - from ...
+def address(request, pv, address_type) -> address_data:
+    from_ = request.param
+    address_inf = pv.inf[address_type]
+    instance = pv.pub.get_address(address_type, 'mainnet')
+
+    if from_ == 'hash':
+        instance = type(instance).from_hash(address_inf['hash'])
+
+    return address_data(address_inf, instance, pv)
+
+
 class TestAddresses:
     def test_script_pub_key(self, address):
         assert address.instance.script_pub_key.to_hex() == address.inf['script_pub_key']
 
     @network_parametrize
     def test_string(self, address, network):
-        assert address.instance.change_network(network).string == address.inf['string'][network]
+        ins = address.instance.change_network(network)
+        assert ins.string == address.inf['string'][network] == str(ins)
 
     def test_hash(self, address):
         assert address.instance.hash == address.inf['hash']
+
+    def test_network(self, address):
+        assert address.instance.network == 'mainnet'
