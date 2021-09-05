@@ -33,7 +33,7 @@ class _int(int, ABC):
 
         return cls(int.from_bytes(value, endian, signed=cls._signed))
 
-    def pack(self, *, endian: str = 'little') -> bytes:
+    def pack(self, endian: str = 'little') -> bytes:
         return super().to_bytes(self.size, endian, signed=self._signed)
 
 
