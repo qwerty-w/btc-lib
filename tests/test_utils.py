@@ -60,3 +60,8 @@ class TestUnsignedInt:
     def test_unpack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
         assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
+
+
+def test_get_2sha256():
+    random_data = random.randbytes(64)
+    assert sha256(sha256(random_data).digest()).digest() == get_2sha256(random_data)
