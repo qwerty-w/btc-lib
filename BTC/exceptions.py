@@ -63,6 +63,11 @@ class InvalidInputScriptData(exc):
     msg = 'args type must be str, bytes or int, but {} received'
 
 
+class InvalidByteorder(exc):
+    cls = ValueError
+    msg = 'byteorder must be either "little" or "big", but {} received'
+
+
 class UnsupportedAddressType(exc):
     cls = TypeError
     msg = 'unsupported type {}, supported only P2PKH, P2SH (P2SH-P2WPKH), P2WPKH, P2WSH'
