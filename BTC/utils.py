@@ -27,14 +27,14 @@ class _int(int, ABC):
             raise exceptions.IntSizeGreaterThanMaxSize(i, self.size) from None
 
     @classmethod
-    def unpack(cls, value: bytes, endian: str = 'little') -> _int:
+    def unpack(cls, value: bytes, byteorder: str = 'little') -> _int:
         if len(value) > cls.size:
             raise exceptions.IntSizeGreaterThanMaxSize(value, cls.size)
 
-        return cls(int.from_bytes(value, endian, signed=cls._signed))
+        return cls(int.from_bytes(value, byteorder, signed=cls._signed))
 
-    def pack(self, endian: str = 'little') -> bytes:
-        return super().to_bytes(self.size, endian, signed=self._signed)
+    def pack(self, byteorder: str = 'little') -> bytes:
+        return super().to_bytes(self.size, byteorder, signed=self._signed)
 
 
 class _sint(_int):
@@ -63,7 +63,7 @@ class uint64(_uint):
 
 class dint(int):
     @classmethod
-    def unpack(cls, raw_data: bytes, endian: str = 'little', *,
+    def unpack(cls, raw_data: bytes, byteorder: str = 'little', *,
                increased_separator: bool = False) -> tuple[dint, bytes]:
         """
         Receives full data, decoding beginning int, return tuple[int, other_data[int_size:]].
@@ -90,10 +90,10 @@ class dint(int):
             return cls(first_byte_int), raw_data
 
         int_size = SEPARATORS['increased' if increased_separator else 'default'][first_byte]
-        return cls(bytes2int(raw_data[:int_size], endian)), raw_data[int_size:]
+        return cls(bytes2int(raw_data[:int_size], byteorder)), raw_data[int_size:]
 
-    def pack(self, endian: str = 'little', *, increased_separator: bool) -> bytes:
-        size_bytes = int2bytes(self, endian)
+    def pack(self, byteorder: str = 'little', *, increased_separator: bool) -> bytes:
+        size_bytes = int2bytes(self, byteorder)
 
         if self < (253 if increased_separator else 76):
             return size_bytes
@@ -109,17 +109,28 @@ class dint(int):
                 int_size, separator = new_size, sep
                 break
 
-        return separator + self.to_bytes(int_size, endian)
+        return separator + self.to_bytes(int_size, byteorder)
 
 
-def int2bytes(value: int, endian: str = 'big') -> bytes:
+def check_byteorder(func):
+    def inner(value, byteorder):
+        if byteorder not in ('little', 'big'):
+            raise exceptions.InvalidByteorder(byteorder)
+
+        return func(value, byteorder)
+    return inner
+
+
+@check_byteorder
+def int2bytes(value: int, byteorder: str = 'big') -> bytes:  # uses minimum possible bytes size for integer
     h = '%0.2x' % value
     data = bytes.fromhex(('' if len(h) % 2 == 0 else '0') + h)
-    return data if endian == 'big' else data[::-1]
+    return data if byteorder == 'big' else data[::-1]
 
 
-def bytes2int(value: bytes, endian: str = 'big') -> int:
-    bytes_ = value if endian == 'big' else value[::-1]
+@check_byteorder
+def bytes2int(value: bytes, byteorder: str = 'big') -> int:
+    bytes_ = value if byteorder == 'big' else value[::-1]
     return int(bytes_.hex(), 16)
 
 
