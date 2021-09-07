@@ -65,6 +65,7 @@ class TestUnsignedInt:
         assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
 
 
+@pytest.mark.repeat(10)
 def test_get_2sha256():
     random_data = random.randbytes(64)
     assert sha256(sha256(random_data).digest()).digest() == get_2sha256(random_data)
