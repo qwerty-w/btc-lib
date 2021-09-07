@@ -17,7 +17,7 @@ int_ranges = {
 }
 
 
-@pytest.fixture(params=[sint32, sint64])
+@pytest.fixture(params=[sint32, sint64, uint32, uint64])
 def int_cls(request):
     return request.param
 
@@ -35,23 +35,26 @@ def byteorder(request):
 
 
 class TestUnsignedInt:
-    # def test_size(self, cls):
-    #     assert int(cls.__name__[-2:]) == cls.size * 8
-    #
-    # @pytest.mark.parametrize('level', ['max', 'min'])
-    # def test_min_max_size(self, int_cls, level):
-    #     value = int_ranges[int_cls._signed][int_cls.size * 8][0 if level == 'min' else 1]
-    #
-    #     try:
-    #         int_cls(value)
-    #     except:
-    #         assert False
-    #
-    #     try:
-    #         int_cls(value + (-1 if level == 'min' else 1))
-    #         assert False
-    #     except:
-    #         assert True
+    def test_size(self, int_cls):
+        assert int(int_cls.__name__[-2:]) == int_cls.size * 8
+
+    @pytest.mark.parametrize('level', ['max', 'min'])
+    def test_min_max_size(self, int_cls, level):
+        signed = 'signed' if int_cls._signed else 'unsigned'
+        level_value = int_ranges[signed][int_cls.size * 8][0 if level == 'min' else 1]
+
+        # cls(max/min_value) - should be pass
+        try:
+            int_cls(level_value)
+        except:
+            assert False
+
+        # cls(max + 1/min - 1 value) - should be not pass
+        try:
+            int_cls(level_value + (-1 if level == 'min' else 1))
+            assert False
+        except:
+            assert True
 
     def test_pack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
