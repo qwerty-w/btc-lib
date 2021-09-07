@@ -16,6 +16,22 @@ int_ranges = {
     }
 }
 
+i2b_data = [
+    (-32767, b'\x80\x01'),
+    (-32768, b'\x80\x00'),
+    (-32769, b'\xff\x7f\xff'),
+    (-127, b'\x81'),
+    (-128, b'\x80'),
+    (-129, b'\xff\x7f'),
+    (127, b'\x7f'),
+    (128, b'\x00\x80'),
+    (32767, b'\x7f\xff'),
+    (32768, b'\x00\x80\x00'),
+
+    (10000000, b'\x00\x98\x96\x80'),
+    (-10000000, b'\xff\x67\x69\x80')
+]
+
 
 @pytest.fixture(params=[sint32, sint64, uint32, uint64])
 def int_cls(request):
@@ -69,3 +85,24 @@ class TestUnsignedInt:
 def test_get_2sha256():
     random_data = random.randbytes(64)
     assert sha256(sha256(random_data).digest()).digest() == get_2sha256(random_data)
+
+
+def i2b_id(data):
+    integer, integer_bytes = data
+    return f'({integer})-0x{integer_bytes.hex()}'
+
+
+@pytest.fixture(params=i2b_data, ids=i2b_id)
+def i2b_items(request, byteorder):
+    integer, integer_bytes = request.param
+    return (integer, integer_bytes if byteorder == 'big' else integer_bytes[::-1]), byteorder
+
+
+def test_int2bytes_signed(i2b_items):
+    (integer, integer_bytes), byteorder = i2b_items
+    assert integer_bytes == int2bytes(integer, byteorder, signed=True)
+
+
+def test_bytes2int_signed(i2b_items):
+    (integer, integer_bytes), byteorder = i2b_items
+    assert integer == bytes2int(integer_bytes, byteorder, signed=True)
