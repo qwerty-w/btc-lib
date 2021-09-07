@@ -113,25 +113,39 @@ class dint(int):
 
 
 def check_byteorder(func):
-    def inner(value, byteorder):
+    def inner(value, byteorder: str = 'big', *, signed: bool = False):
         if byteorder not in ('little', 'big'):
             raise exceptions.InvalidByteorder(byteorder)
 
-        return func(value, byteorder)
+        return func(value, byteorder, signed=signed)
     return inner
 
 
 @check_byteorder
-def int2bytes(value: int, byteorder: str = 'big') -> bytes:  # uses minimum possible bytes size for integer
-    h = '%0.2x' % value
-    data = bytes.fromhex(('' if len(h) % 2 == 0 else '0') + h)
-    return data if byteorder == 'big' else data[::-1]
+def int2bytes(value: int, byteorder: str = 'big', *, signed: bool = False) -> bytes:
+    """
+    Uses minimum possible bytes size for integer.
+    """
+    is_negative = value < 0
+    if is_negative:
+        signed = True
+
+    size = int((size := value.bit_length() / 8) + (0 if size.is_integer() else 1))  # unsigned size
+
+    if signed:
+        # max positive/negative values with unsigned size
+        max_positive_value = int.from_bytes(b'\xff' * size, 'big') // 2
+        max_negative_value = -max_positive_value - 1
+
+        if not is_negative and value > max_positive_value or is_negative and value < max_negative_value:
+            size += 1
+
+    return value.to_bytes(size, byteorder, signed=signed)
 
 
 @check_byteorder
-def bytes2int(value: bytes, byteorder: str = 'big') -> int:
-    bytes_ = value if byteorder == 'big' else value[::-1]
-    return int(bytes_.hex(), 16)
+def bytes2int(value: bytes, byteorder: str = 'big', *, signed: bool = False) -> int:
+    return int.from_bytes(value, byteorder, signed=signed)
 
 
 def get_2sha256(data: bytes) -> bytes:
