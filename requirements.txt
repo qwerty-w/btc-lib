@@ -3,3 +3,4 @@ bit~=0.7.2
 ecdsa~=0.17.0
 sympy~=1.8
 pytest~=6.2.4
+pytest-repeat~=0.9.1
