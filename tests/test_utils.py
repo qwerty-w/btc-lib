@@ -108,7 +108,7 @@ def test_get_2sha256():
 
 def i2b_id(data):
     integer, integer_bytes = data
-    return f'({integer})-0x{integer_bytes.hex()}'
+    return f'<{integer}>-0x{integer_bytes.hex()}'
 
 
 @pytest.fixture(params=i2b_data, ids=i2b_id)
@@ -127,15 +127,14 @@ def test_bytes2int_signed(i2b_items):
     assert integer == bytes2int(integer_bytes, byteorder, signed=True)
 
 
-def an_data(data):
-    return [(address, network) for network in data for address in data[network]]
+def test_get_address_network_correct_data(address, network):
+    assert network == get_address_network(address.string[network])
 
 
-@pytest.mark.parametrize('address, network', an_data(correct_address_network_data))
-def test_get_address_network_correct(address, network):
-    assert network == get_address_network(address)
+@pytest.mark.parametrize('incorrect_address', incorrect_address_network_data)
+def test_get_address_network_incorrect_data(incorrect_address):
+    assert get_address_network(incorrect_address) is None
 
 
-@pytest.mark.parametrize('value', incorrect_address_network_data)
-def test_get_address_network_incorrect(value):
-    assert get_address_network(value) is None
+def test_get_address_type(address, network):
+    assert get_address_type(address.string[network]) == address.instance.type
