@@ -1,17 +1,19 @@
 [
     {
-        "wif": {
-            "compressed": {
-                "mainnet": "KyFfKRAJmKCX7kzfDkS9FUn4SWrHMK8t82XWvtkqPGN81WmffrLy",
-                "testnet": "cPcenLAACNtnHCTvcAFGcoH84k9h1mEaC4fz3KDLtP28GFquTCV7"
+    "pv": {
+            "wif": {
+                "compressed": {
+                    "mainnet": "KyFfKRAJmKCX7kzfDkS9FUn4SWrHMK8t82XWvtkqPGN81WmffrLy",
+                    "testnet": "cPcenLAACNtnHCTvcAFGcoH84k9h1mEaC4fz3KDLtP28GFquTCV7"
+                },
+                "uncompressed": {
+                    "mainnet": "5JH1XTKRR62hoqwJGaQNMVx4xAwDKCMpNyzDDfThR5PTWdvH8YP",
+                    "testnet": "923e7C8y1K6qmuSatvJHE6W2bqHvUMu1ivrAJHpCkp8WHcwoREZ"
+                }
             },
-            "uncompressed": {
-                "mainnet": "5JH1XTKRR62hoqwJGaQNMVx4xAwDKCMpNyzDDfThR5PTWdvH8YP",
-                "testnet": "923e7C8y1K6qmuSatvJHE6W2bqHvUMu1ivrAJHpCkp8WHcwoREZ"
-            }
+            "hex": "3cada192b9679369525cac7a05b6055dac3b7760a8b8b37cb95e079648a84776"
         },
-        "hex": "3cada192b9679369525cac7a05b6055dac3b7760a8b8b37cb95e079648a84776",
-        "pub": {
+    "pub": {
             "hex": {
                 "compressed": "02ea2b8c6913c04593764bdf8e9ff4ae113a1db15c3f80629dac87c7f0acd853b5",
                 "uncompressed": "04ea2b8c6913c04593764bdf8e9ff4ae113a1db15c3f80629dac87c7f0acd853b5502fefe2bb47f80a121b57c79013a7d8a539d3f55198aaa70d31c94597633854"
