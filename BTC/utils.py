@@ -64,7 +64,7 @@ class uint64(_uint):
 class dint(int):
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: str = 'little', *,
-               increased_separator: bool = False) -> tuple[dint, bytes]:
+               increased_separator: bool = True) -> tuple[dint, bytes]:
         """
         Receives full data, decoding beginning int, return tuple[int, other_data[int_size:]].
         Most commonly used to get the size of the following data.
@@ -92,7 +92,7 @@ class dint(int):
         int_size = SEPARATORS['increased' if increased_separator else 'default'][first_byte]
         return cls(bytes2int(raw_data[:int_size], byteorder)), raw_data[int_size:]
 
-    def pack(self, byteorder: str = 'little', *, increased_separator: bool) -> bytes:
+    def pack(self, byteorder: str = 'little', *, increased_separator: bool = True) -> bytes:
         size_bytes = int2bytes(self, byteorder)
 
         if self < (253 if increased_separator else 76):
