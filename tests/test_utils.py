@@ -32,18 +32,6 @@ i2b_data = [
     (-10000000, b'\xff\x67\x69\x80')
 ]
 
-correct_address_network_data = {
-    'mainnet': [
-        '1NL24E8oHWUGA8dbjQRnhhwEfzyo62E1fW',
-        '3L7eHfJVpaZjnkDJi5d8t487Tmpm1kQ3F8',
-        'bc1qvdhxfplzc0xymvxm2an6zcy489jwqtaykynvgq',
-        'bc1qljvsdavfjea3jhwvak2h2ht2kf9zpf39phhtyemv3d5n8r6vlspsjjcta8'
-    ],
-    'testnet': [
-
-    ]
-}
-
 incorrect_address_network_data = [
     '0NL24E8oHWUGA8dbjQRnhhwEfzyo62E1fW',
     'L7eHfJVpaZjnkDJi5d8t487Tmpm1kQ3F8',

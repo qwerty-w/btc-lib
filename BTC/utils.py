@@ -211,8 +211,8 @@ def validate_address(address: str, address_type: str, address_network: str) -> b
 
 
 def to_satoshis(value: float) -> int:
-    return int(value * 100000000)
+    return int(Decimal(str(value)) * 100000000)
 
 
-def to_bitcoins(value: int) -> Decimal:
-    return Decimal(value) / 100000000
+def to_bitcoins(value: int) -> float:
+    return float(Decimal(str(value)) / 100000000)
