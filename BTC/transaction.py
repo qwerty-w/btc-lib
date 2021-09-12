@@ -157,7 +157,7 @@ class Input(SupportsDumps, SupportsSerialize):
 
     def serialize(self) -> bytes:
         sig = self.script_sig.to_bytes()
-        sig_size = dint(len(sig)).pack(increased_separator=True)
+        sig_size = dint(len(sig)).pack()
 
         return b''.join([
             bytes.fromhex(self.tx_id)[::-1],
@@ -212,7 +212,7 @@ class Output(SupportsDumps, SupportsSerialize):
 
     def serialize(self) -> bytes:
         script_pub_key = self.script_pub_key.to_bytes()
-        script_pub_key_size = dint(len(script_pub_key)).pack(increased_separator=True)
+        script_pub_key_size = dint(len(script_pub_key)).pack()
 
         return b''.join([
             self.amount.pack(),
@@ -300,7 +300,7 @@ class _Hash4SignGenerator:  # hash for sign
         main_inp_seq = tx.inputs[self.index].sequence.pack()
 
         script4hash = self.script4hash.to_bytes()
-        script4hash_size = dint(len(script4hash)).pack(increased_separator=True)
+        script4hash_size = dint(len(script4hash)).pack()
 
         if tx.inputs[self.index].amount is None:
             raise exceptions.SegwitHash4SignRequiresInputAmount
@@ -348,7 +348,7 @@ class _TransactionDeserializer:
         return data
 
     def pop_size(self) -> int:
-        size, self.raw = dint.unpack(self.raw, increased_separator=True)
+        size, self.raw = dint.unpack(self.raw)
         return size
 
     def deserialize(self) -> dict[str, str | int | list[dict]]:
@@ -516,12 +516,12 @@ class Transaction(SupportsDumps, SupportsSerialize):
     def serialize(self, *, return_bytes: bool = False, exclude_witnesses: bool = False) -> str | bytes:
         has_segwit = False if exclude_witnesses else self.has_segwit_input()
 
-        inps_count = dint(len(self.inputs)).pack(increased_separator=True)
+        inps_count = dint(len(self.inputs)).pack()
         inps = b''
         for inp in self.inputs:
             inps += inp.serialize()
 
-        outs_count = dint(len(self.outputs)).pack(increased_separator=True)
+        outs_count = dint(len(self.outputs)).pack()
         outs = b''
         for out in self.outputs:
             outs += out.serialize()
@@ -529,7 +529,7 @@ class Transaction(SupportsDumps, SupportsSerialize):
         witnesses = b''
         if has_segwit:
             for inp in self.inputs:
-                witnesses += dint(len(inp.witness)).pack(increased_separator=True)
+                witnesses += dint(len(inp.witness)).pack()
                 witnesses += inp.witness.to_bytes(segwit=True)
 
         serialized_tx = b''.join([
