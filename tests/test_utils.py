@@ -32,7 +32,7 @@ i2b_data = [
     (-10000000, b'\xff\x67\x69\x80')
 ]
 
-incorrect_address_network_data = [
+incorrect_addresses = [
     '0NL24E8oHWUGA8dbjQRnhhwEfzyo62E1fW',
     'L7eHfJVpaZjnkDJi5d8t487Tmpm1kQ3F8',
     'tl1qvdhxfplzc0xymvxm2an6zcy489jwqtaykynvgq',
@@ -119,10 +119,23 @@ def test_get_address_network_correct_data(address, network):
     assert network == get_address_network(address.string[network])
 
 
-@pytest.mark.parametrize('incorrect_address', incorrect_address_network_data)
+@pytest.mark.parametrize('incorrect_address', incorrect_addresses)
 def test_get_address_network_incorrect_data(incorrect_address):
     assert get_address_network(incorrect_address) is None
 
 
 def test_get_address_type(address, network):
     assert get_address_type(address.string[network]) == address.instance.type
+
+
+def test_validate_address_correct_data(address, network):
+    assert validate_address(address.string[network], address.instance.type, network)
+
+
+@pytest.mark.parametrize('incorrect_address', incorrect_addresses)
+def test_validate_address_incorrect_data(incorrect_address):
+    assert False is validate_address(
+        incorrect_address,
+        random.choice(['P2PKH', 'P2SH', 'P2WSH', 'P2WPKH']),
+        random.choice(['mainnet', 'testnet'])
+    )
