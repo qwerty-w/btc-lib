@@ -130,3 +130,8 @@ class IntSizeGreaterThanMaxSize(exc):
 class HexLengthMustBeMultipleTwo(exc):
     cls = ValueError
     msg = 'hex expected, his length multiple of two'
+
+
+class DynamicIntOnlySupportsUnsignedInt(exc):
+    cls = ValueError
+    msg = 'dint only supports unsigned int, but {} received'
