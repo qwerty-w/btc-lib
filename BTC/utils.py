@@ -62,6 +62,10 @@ class uint64(_uint):
 
 
 class dint(int):
+    def __init__(self, *args, **kwargs):
+        if self < 0:
+            raise exceptions.DynamicIntOnlySupportsUnsignedInt(self)
+
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: str = 'little', *,
                increased_separator: bool = True) -> tuple[dint, bytes]:
@@ -131,6 +135,9 @@ def int2bytes(value: int, byteorder: str = 'big', *, signed: bool = False) -> by
         signed = True
 
     size = int((size := value.bit_length() / 8) + (0 if size.is_integer() else 1))  # unsigned size
+
+    if value == 0:
+        size = 1
 
     if signed:
         # max positive/negative values with unsigned size
