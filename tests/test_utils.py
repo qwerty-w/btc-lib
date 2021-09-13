@@ -57,27 +57,45 @@ def byteorder(request):
     return request.param
 
 
+@pytest.fixture(params=['min', 'max'])
+def level(request):
+    return request.param
+
+
+class IsIncreased:
+    def __init__(self, value: bool):
+        self.string = 'increased' if value else 'default'
+        self.bool = value
+
+
+def _test_min_max_size(cls, values, level):
+    value = values[0 if level == 'min' else 1]
+
+    # cls(max/min_value) - should be pass
+    try:
+        cls(value)
+    except:
+        return False
+
+    # cls(max + 1/min - 1 value) - should be not pass
+    try:
+        cls(value + (-1 if level == 'min' else 1))
+    except:
+        return True
+
+    return False
+
+
 class TestUnsignedInt:
     def test_size(self, int_cls):
         assert int(int_cls.__name__[-2:]) == int_cls.size * 8
 
-    @pytest.mark.parametrize('level', ['max', 'min'])
     def test_min_max_size(self, int_cls, level):
-        signed = 'signed' if int_cls._signed else 'unsigned'
-        level_value = int_ranges[signed][int_cls.size * 8][0 if level == 'min' else 1]
-
-        # cls(max/min_value) - should be pass
-        try:
-            int_cls(level_value)
-        except:
-            assert False
-
-        # cls(max + 1/min - 1 value) - should be not pass
-        try:
-            int_cls(level_value + (-1 if level == 'min' else 1))
-            assert False
-        except:
-            assert True
+        assert _test_min_max_size(
+            int_cls,
+            int_ranges['signed' if int_cls._signed else 'unsigned'][int_cls.size * 8],
+            level
+        )
 
     def test_pack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
@@ -86,6 +104,20 @@ class TestUnsignedInt:
     def test_unpack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
         assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
+
+
+@pytest.fixture(params=[IsIncreased(True), IsIncreased(False)])
+def increased(request):
+    return request.param
+
+
+class TestDynamicInt:
+    def test_min_max_size(self, level, increased):
+        assert _test_min_max_size(
+            lambda v: dint(v).pack(increased_separator=increased.bool),
+            int_ranges['unsigned'][64 if increased.bool else 32],
+            level
+        )
 
 
 @pytest.mark.repeat(10)
