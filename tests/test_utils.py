@@ -119,6 +119,35 @@ class TestDynamicInt:
             level
         )
 
+    def test_pack_one_size_byte_separator(self, increased):
+        separators_start = 76 if not increased.bool else 253
+
+        for integer in range(separators_start):
+            assert dint(integer).pack(increased_separator=increased.bool) == bytes([integer])
+
+        for integer in range(separators_start, 256):
+            sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
+            packed = sep + bytes([integer]) + (b'\x00' if increased.bool else b'')
+            assert packed == dint(integer).pack(increased_separator=increased.bool)
+
+    def test_pack_separators(self, increased, byteorder):
+        separators = SEPARATORS_REVERSED[increased.string]
+
+        index = 2
+        for sep_size, sep in separators.items():
+            next_index = sep_size + 1
+
+            for size in range(index, next_index):
+                rand_int_b = random.randbytes(size)
+                rand_int_b = b''.join(b'\x00' for _ in range(sep_size - len(rand_int_b))) + rand_int_b
+
+                rand_int = int.from_bytes(rand_int_b, 'big')  # byteorder does not matter
+                packed = dint(rand_int).pack(increased_separator=increased.bool, byteorder=byteorder)
+
+                assert sep + rand_int_b[::-1 if byteorder == 'little' else 1] == packed
+
+            index = next_index
+
 
 @pytest.mark.repeat(10)
 def test_get_2sha256():
