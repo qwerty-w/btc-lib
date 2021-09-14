@@ -106,7 +106,11 @@ class TestUnsignedInt:
         assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
 
 
-@pytest.fixture(params=[IsIncreased(True), IsIncreased(False)])
+def inc_id(value):
+    return value.string
+
+
+@pytest.fixture(params=[IsIncreased(True), IsIncreased(False)], ids=inc_id)
 def increased(request):
     return request.param
 
@@ -119,34 +123,62 @@ class TestDynamicInt:
             level
         )
 
-    def test_pack_one_size_byte_separator(self, increased):
+    @staticmethod
+    def _bsize_gen(increased, byteorder):  # iterate all possible sizes with random int
+        index = 2  # start with 2 bytes size
+
+        for sep, max_size in SEPARATORS[increased.string].items():
+            for bsize in range(index, max_size + 1):
+                int_b = random.randbytes(bsize)
+                # fill with b'\x00' to max_size
+                int_b = b''.join(b'\x00' for _ in range(max_size - bsize)) + int_b
+                int_b = int_b[::-1 if byteorder == 'little' else 1]
+
+                yield sep, int_b
+
+            index = max_size + 1
+
+    @staticmethod
+    def _one_bsize_gen(sep_start, increased, byteorder):
+        for integer in range(sep_start, 256):
+            sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
+            int_b = ((b'\x00' if increased.bool else b'') + bytes([integer]))[::-1 if byteorder == 'little' else 1]
+            yield sep, int_b
+
+    def test_pack_one_bsize_separator(self, byteorder, increased):
         separators_start = 76 if not increased.bool else 253
 
         for integer in range(separators_start):
-            assert dint(integer).pack(increased_separator=increased.bool) == bytes([integer])
+            assert dint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
 
-        for integer in range(separators_start, 256):
-            sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
-            packed = sep + bytes([integer]) + (b'\x00' if increased.bool else b'')
-            assert packed == dint(integer).pack(increased_separator=increased.bool)
+        for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
+            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            assert sep + int_b == packed
 
     def test_pack_separators(self, increased, byteorder):
-        separators = SEPARATORS_REVERSED[increased.string]
+        for sep, int_b in self._bsize_gen(increased, byteorder):
+            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
 
-        index = 2
-        for sep_size, sep in separators.items():
-            next_index = sep_size + 1
+            assert sep + int_b == packed
 
-            for size in range(index, next_index):
-                rand_int_b = random.randbytes(size)
-                rand_int_b = b''.join(b'\x00' for _ in range(sep_size - len(rand_int_b))) + rand_int_b
+    def test_unpack_one_bsize_separator(self, increased, byteorder):
+        separators_start = 76 if not increased.bool else 253
 
-                rand_int = int.from_bytes(rand_int_b, 'big')  # byteorder does not matter
-                packed = dint(rand_int).pack(increased_separator=increased.bool, byteorder=byteorder)
+        for integer in range(separators_start):
+            assert dint.unpack(bytes([integer]), byteorder, increased_separator=increased.bool)[0] == integer
 
-                assert sep + rand_int_b[::-1 if byteorder == 'little' else 1] == packed
+        for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
+            unpacked = dint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
+            assert int.from_bytes(int_b, byteorder) == unpacked
 
-            index = next_index
+    def test_unpack_separators(self, increased, byteorder):
+        for sep, int_b in self._bsize_gen(increased, byteorder):
+            out_int, _ = dint.unpack(
+                sep + int_b,
+                byteorder,
+                increased_separator=increased.bool
+            )
+            assert out_int == int.from_bytes(int_b, byteorder)
 
 
 @pytest.mark.repeat(10)
