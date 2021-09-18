@@ -8,7 +8,7 @@ from utils import dint
 
 class Script:
     def __init__(self, *data: str | bytes | int):
-        self.script = tuple(self._process_input_data(data))
+        self.script = tuple(self._validate_data(data))
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}{str(self.script)}'
@@ -17,7 +17,7 @@ class Script:
         return len(self.script)
 
     @staticmethod
-    def _process_input_data(raw_data: Iterable) -> list[str]:
+    def _validate_data(raw_data: Iterable) -> list[str]:
         _data = []
 
         for index, item in enumerate(raw_data):
