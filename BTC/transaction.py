@@ -172,11 +172,14 @@ class Output(SupportsDumps, SupportsSerialize):
     def __init__(self, address_or_script_pub_key: BitcoinAddress | Script | str, amount: int):
         instance = address_or_script_pub_key
 
-        if not isinstance(instance, BitcoinAddress):
+        if isinstance(instance, (str, Script)):
             try:
                 instance = from_script_pub_key(instance)
             except:
                 instance = instance if isinstance(instance, Script) else Script.from_raw(instance)
+
+        elif not isinstance(instance, BitcoinAddress):
+            raise exceptions.InvalidAddressClassType(type(instance))
 
         self.address = instance if isinstance(instance, BitcoinAddress) else None
         self.script_pub_key = self.address.script_pub_key if isinstance(instance, BitcoinAddress) else instance
