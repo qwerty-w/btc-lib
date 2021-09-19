@@ -170,6 +170,9 @@ class BitcoinAddress(ABC):
         ...
 
     def change_network(self, network: str | None = None) -> BitcoinAddress:
+        if network == self.network:
+            return self
+
         cls = type(self)
         network = network if network is not None else ('mainnet' if self.network == 'testnet' else 'testnet')
         return cls.from_hash(self.hash, network)
