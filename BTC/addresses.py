@@ -238,9 +238,9 @@ class SegwitAddress(BitcoinAddress, ABC):
         self.version: int = self._bech32decode(address, self.network)[0]
 
     @classmethod
-    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK,
+    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK, *,
                   version: int = DEFAULT_WITNESS_VERSION) -> SegwitAddress:
-        return cls(cls._bech32encode(bytes.fromhex(hash_), network, version))
+        return cls(cls._bech32encode(bytes.fromhex(hash_), network, version=version))
 
     def _get_hash(self) -> str:
         _, int_list = self._bech32decode(self.string, self.network)
@@ -250,7 +250,7 @@ class SegwitAddress(BitcoinAddress, ABC):
         return Script('OP_0', self.hash)
 
     @staticmethod
-    def _bech32encode(data: bytes, network: str, version: int) -> str:
+    def _bech32encode(data: bytes, network: str, *, version: int) -> str:
         return bech32.encode(PREFIXES['bech32'][network], version, list(data))
 
     @staticmethod
@@ -282,7 +282,7 @@ def get_address(address: str) -> BitcoinAddress:
     return cls(address)
 
 
-def from_script_pub_key(data: Script | str) -> BitcoinAddress:
+def from_script_pub_key(data: Script | str, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
     script = data if isinstance(data, Script) else Script.from_raw(data)
     script_len = len(script)
 
@@ -303,10 +303,10 @@ def from_script_pub_key(data: Script | str) -> BitcoinAddress:
     check = lambda dict_: all([script.script[index] == value for index, value in dict_.items()])
 
     if script_len == 5 and check(p2pkh):
-        return P2PKH.from_hash(script.script[2])
+        return P2PKH.from_hash(script.script[2], network)
 
     elif script_len == 3 and check(p2sh):
-        return P2SH.from_hash(script.script[1])
+        return P2SH.from_hash(script.script[1], network)
 
     elif script_len == 2 and check(segwit):
 
@@ -314,9 +314,9 @@ def from_script_pub_key(data: Script | str) -> BitcoinAddress:
         hash_len = len(hash_)
 
         if hash_len == 40:
-            return P2WPKH.from_hash(hash_)
+            return P2WPKH.from_hash(hash_, network)
 
         elif hash_len == 64:
-            return P2WSH.from_hash(hash_)
+            return P2WSH.from_hash(hash_, network)
 
     raise exceptions.InvalidScriptPubKey(data)
