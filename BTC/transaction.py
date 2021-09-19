@@ -262,7 +262,7 @@ class _Hash4SignGenerator:  # hash for sign
         if self.sighash & SIGHASHES['anyonecanpay']:
             tx.inputs = (tx.inputs[self.index])
 
-        serialized = tx.serialize(return_bytes=True, exclude_witnesses=True) + self.sighash.pack()
+        serialized = tx.serialize(to_bytes=True, exclude_witnesses=True) + self.sighash.pack()
         return get_2sha256(serialized)
 
     def get_segwit(self) -> bytes:
@@ -464,7 +464,7 @@ class Transaction(SupportsDumps, SupportsSerialize):
         self.fee = amount - sum(out.amount for out in self.outputs)
 
     def get_id(self) -> str:
-        return get_2sha256(self.serialize(return_bytes=False)).hex()[::-1]
+        return get_2sha256(self.serialize(to_bytes=True, exclude_witnesses=True))[::-1].hex()
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *,
                       segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
@@ -516,7 +516,7 @@ class Transaction(SupportsDumps, SupportsSerialize):
         }
         return Transaction(**tx_args)
 
-    def serialize(self, *, return_bytes: bool = False, exclude_witnesses: bool = False) -> str | bytes:
+    def serialize(self, *, to_bytes: bool = False, exclude_witnesses: bool = False) -> str | bytes:
         has_segwit = False if exclude_witnesses else self.has_segwit_input()
 
         inps_count = dint(len(self.inputs)).pack()
@@ -545,4 +545,4 @@ class Transaction(SupportsDumps, SupportsSerialize):
             witnesses,
             self.locktime.pack()
         ])
-        return serialized_tx.hex() if not return_bytes else serialized_tx
+        return serialized_tx.hex() if not to_bytes else serialized_tx
