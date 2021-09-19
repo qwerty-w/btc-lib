@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Iterable
+from abc import abstractmethod
+from typing import Iterable, Protocol
 import json
 
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
@@ -16,7 +16,7 @@ def get_inputs(*args: list[PrivateKey, BitcoinAddress] | tuple[PrivateKey, Bitco
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
-class SupportsDumps(ABC):
+class SupportsDump(Protocol):
     @abstractmethod
     def as_dict(self) -> dict:
         ...
@@ -26,13 +26,19 @@ class SupportsDumps(ABC):
         return json.dumps(value, indent=indent)
 
 
-class SupportsSerialize(ABC):
+class SupportsSerialize(Protocol):
     @abstractmethod
     def serialize(self) -> str | bytes:
         ...
 
 
-class Input(SupportsDumps, SupportsSerialize):
+class SupportsCopy(Protocol):
+    @abstractmethod
+    def copy(self):
+        ...
+
+
+class Input(SupportsDump, SupportsSerialize, SupportsCopy):
     def __init__(self, tx_id: str, out_index: int, amount: int | None = None, pv: PrivateKey | None = None,
                  address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE):
         """
@@ -168,7 +174,7 @@ class Input(SupportsDumps, SupportsSerialize):
         ])
 
 
-class Output(SupportsDumps, SupportsSerialize):
+class Output(SupportsDump, SupportsSerialize, SupportsCopy):
     def __init__(self, address_or_script_pub_key: BitcoinAddress | Script | str, amount: int):
         instance = address_or_script_pub_key
 
@@ -401,7 +407,7 @@ class _TransactionDeserializer:
         return data
 
 
-class Transaction(SupportsDumps, SupportsSerialize):
+class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
                  version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
 
