@@ -1,0 +1,35 @@
+[
+  {
+      "inputs": [
+          {
+              "wif": "L4nDwjniGzGGsRSuFfbbV5cwSzG36g9mkgNwmkqkAp9EQYcTmRqq",
+              "type": "P2PKH",
+              "tx_id": "2230e577b93fd1c2baaeeb38664fa9bf00052003b9ff8c2422f281673260e36d",
+              "out_index": 0,
+              "amount": 0,
+              "script": "483045022100aa10e832818d2b34e0f7a215eeeb8ae97a318e8418c560d91415034a4bc4ca36022074d8cb2a9a2ec3f82f0347be0424a29261a35eb8d544746ded8ce80be6b09cfb012103900b469e01a0a3fc3077ed7ebbdd8ba33195949a5acca8c7321535dcb15119ce",
+              "witness": null,
+              "sequence": 4294967295,
+              "serialized": "6de360326781f222248cffb903200500bfa94f6638ebaebac2d13fb977e53022000000006b483045022100aa10e832818d2b34e0f7a215eeeb8ae97a318e8418c560d91415034a4bc4ca36022074d8cb2a9a2ec3f82f0347be0424a29261a35eb8d544746ded8ce80be6b09cfb012103900b469e01a0a3fc3077ed7ebbdd8ba33195949a5acca8c7321535dcb15119ceffffffff"
+          }
+      ],
+      "outputs": [
+          {
+              "script_pub_key": "a9146ae428adf7f756640e02ed6df9f08d576e7557c787",
+              "amount": 3000
+          },
+          {
+              "script_pub_key": "001424b5f90f85fd734580bd8b69b804480d4c401b59",
+              "amount": 3000
+          },
+          {
+              "script_pub_key": "0020eb97d9fa2a77d2ed4d6808b5437d0d7bcfb7112f6e5c832344817122f5de54e7",
+              "amount": 3000
+          }
+      ],
+      "fee": "<unknown>",
+      "version": 2,
+      "locktime": 0,
+      "serialized": "02000000016de360326781f222248cffb903200500bfa94f6638ebaebac2d13fb977e53022000000006b483045022100aa10e832818d2b34e0f7a215eeeb8ae97a318e8418c560d91415034a4bc4ca36022074d8cb2a9a2ec3f82f0347be0424a29261a35eb8d544746ded8ce80be6b09cfb012103900b469e01a0a3fc3077ed7ebbdd8ba33195949a5acca8c7321535dcb15119ceffffffff03b80b00000000000017a9146ae428adf7f756640e02ed6df9f08d576e7557c787b80b00000000000016001424b5f90f85fd734580bd8b69b804480d4c401b59b80b000000000000220020eb97d9fa2a77d2ed4d6808b5437d0d7bcfb7112f6e5c832344817122f5de54e700000000"
+ }
+]
