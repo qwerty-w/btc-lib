@@ -157,9 +157,10 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         else:
             raise exceptions.InvalidAddressClassType(type(self.address))
 
-    def custom_sign(self, signed_script: Script, witness: Script):
-        self.script_sig = signed_script if signed_script is not None else Script()
-        self.witness = witness if witness is not None else Script()
+    def custom_sign(self, signed_script: Script | str, witness: Script | str):
+        for name, value in [('script_sig', signed_script), ('witness', witness)]:
+            value = Script() if value is None else Script.from_raw(value) if isinstance(value, str) else value
+            setattr(self, name, value)
 
     def serialize(self) -> bytes:
         sig = self.script_sig.to_bytes()
