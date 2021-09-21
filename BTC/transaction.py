@@ -58,7 +58,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         self.amount = uint64(amount) if amount is not None else amount
         self.sequence = uint32(sequence)
 
-        self.script_sig = Script()
+        self.script = Script()
         self.witness = Script()
 
     def __repr__(self):
@@ -83,8 +83,8 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         if address and self.address:
             items = [('address', self.address.string), *items]
 
-        if script and not self.script_sig.is_empty():
-            items.append(('script', self.script_sig.to_hex()))
+        if script and not self.script.is_empty():
+            items.append(('script', self.script.to_hex()))
 
         if witness and not self.witness.is_empty():
             items.append(('witness', self.witness.to_hex()))
@@ -109,7 +109,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
             self.address,
             self.sequence,
         )
-        instance.script_sig = self.script_sig
+        instance.script = self.script
         instance.witness = self.witness
 
         return instance
@@ -142,13 +142,13 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         sig = Script(self.pv.sign_tx(hash4sign), self.pub.to_hex())
 
         if isinstance(self.address, P2PKH):
-            self.script_sig = sig
+            self.script = sig
 
         elif isinstance(self.address, P2SH):  # supports only P2SH-P2WPKH
             if self.pub.get_address('P2SH-P2WPKH', self.address.network).string != self.address.string:
                 raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
 
-            self.script_sig = Script(Script('OP_0', self.pub.get_hash160()).to_hex())
+            self.script = Script(Script('OP_0', self.pub.get_hash160()).to_hex())
             self.witness = sig
 
         elif isinstance(self.address, P2WPKH):
@@ -158,12 +158,12 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
             raise exceptions.InvalidAddressClassType(type(self.address))
 
     def custom_sign(self, signed_script: Script | str, witness: Script | str):
-        for name, value in [('script_sig', signed_script), ('witness', witness)]:
+        for name, value in [('script', signed_script), ('witness', witness)]:
             value = Script() if value is None else Script.from_raw(value) if isinstance(value, str) else value
             setattr(self, name, value)
 
     def serialize(self) -> bytes:
-        sig = self.script_sig.to_bytes()
+        sig = self.script.to_bytes()
         sig_size = dint(len(sig)).pack()
 
         return b''.join([
@@ -242,9 +242,9 @@ class _Hash4SignGenerator:  # hash for sign
         tx = self.tx.copy()
 
         for inp in tx.inputs:
-            inp.script_sig = Script()
+            inp.script = Script()
 
-        tx.inputs[self.index].script_sig = self.script4hash
+        tx.inputs[self.index].script = self.script4hash
 
         if (self.sighash & 0x1f) == SIGHASHES['none']:
             tx.outputs = ()
@@ -379,7 +379,7 @@ class _TransactionDeserializer:
             data['inputs'].append({
                 'tx_id': self.pop(32)[::-1].hex(),
                 'out_index': uint32.unpack(self.pop(4)),
-                'script_sig': Script.from_raw(self.pop(self.pop_size())).to_hex(),
+                'script': Script.from_raw(self.pop(self.pop_size())).to_hex(),
                 'sequence': uint32.unpack(self.pop(4))
             })
 
@@ -505,8 +505,10 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
                 inp_dict['out_index'],
                 sequence=inp_dict['sequence']
             )
-            inp_instance.script_sig = Script.from_raw(inp_dict['script_sig'])
-            inp_instance.witness = Script.from_raw(inp_dict.get('witness', ''), segwit=True)
+            inp_instance.custom_sign(
+                Script.from_raw(inp_dict['script']),
+                Script.from_raw(inp_dict.get('witness', ''), segwit=True)
+            )
 
             inputs.append(inp_instance)
 
