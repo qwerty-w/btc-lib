@@ -9,12 +9,24 @@ from addresses import PrivateKey
 class GetterObject:
     def __init__(self, data: dict):
         self._cached_object_attrs = []
-        self._deep_setter(data)
+        self._setter(data)
 
-    def _deep_setter(self, obj: dict):
-        for name, value in obj.items():
-            name = self._prepare_name(name)
-            setattr(self, name, value if not isinstance(value, dict) else GetterObject(value))
+    def _handler(self, obj):
+        if not isinstance(obj, (dict, list)):
+            return obj
+
+        if isinstance(obj, dict):
+            return GetterObject(obj)
+
+        items = []
+        for item in obj:
+            items.append(self._handler(item))
+
+        return items
+
+    def _setter(self, data: dict):
+        for name, value in data.items():
+            setattr(self, name, self._handler(value))
             self._cached_object_attrs.append(name)
 
     @staticmethod
@@ -29,7 +41,7 @@ class GetterObject:
         return f'{self.__class__.__name__}({", ".join(sorted(self.get_attrs(), key=str.isupper))})'
 
     def set_data(self, data: dict):
-        self._deep_setter(data)
+        self._setter(data)
 
     def get_attrs(self) -> list:
         return self._cached_object_attrs.copy()
@@ -84,7 +96,7 @@ def unit(request):
     """
     Prepare unit, add pv and pub instances.
     """
-    unit = request.param
+    unit = request.param.copy()
     data = {'pv': (pv := PrivateKey(unit.pv.wif.compressed.mainnet)), 'pub': pv.pub}
 
     for name, instance in data.items():
@@ -93,8 +105,8 @@ def unit(request):
     return unit
 
 
-def at_id(name):
-    return f'<{name}>'
+def at_id(address_type):
+    return f'<{address_type}>'
 
 
 @pytest.fixture(params=['P2PKH', 'P2SH-P2WPKH', 'P2WPKH', 'P2WSH'], ids=at_id)

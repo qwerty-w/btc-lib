@@ -106,8 +106,8 @@ class TestUnsignedInt:
         assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
 
 
-def inc_id(value):
-    return value.string
+def inc_id(item):
+    return item.string
 
 
 @pytest.fixture(params=[IsIncreased(True), IsIncreased(False)], ids=inc_id)
