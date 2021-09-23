@@ -21,7 +21,7 @@ def prepare_tx(tx):
     instance_outs = []
     for out in tx.outputs:
         instance_outs.append(Output(
-            out.script_pub_key,
+            out.script_pub_key,  # Output from script pub key
             out.amount
         ))
 
@@ -41,42 +41,56 @@ def tx(request):
     return request.param.copy()
 
 
-def get_inputs():
+def get_prepared_inp_out(attr):
     txs = get_txs()
 
-    inps = []
+    prepared = []
     for tx_index, tx in enumerate(txs):
-        for inp_index, inp in enumerate(tx.inputs):
-            inp.set_data({
+        for obj_index, obj in enumerate(getattr(tx, attr)):
+            obj.set_data({
                 'tx_index': tx_index,
-                'inp_index': inp_index,
-                'instance': tx.instance.inputs[inp_index]
+                'obj_index': obj_index,
+                'instance': getattr(tx.instance, attr)[obj_index]
             })
-            inps.append(inp)
+            prepared.append(obj)
 
-    return inps
-
-
-def inp_id(item):
-    return f'tx{item.tx_index}-inp{item.inp_index}'
+    return prepared
 
 
-@pytest.fixture(params=get_inputs(), ids=inp_id)
+def inp_out_id(item):
+    return f'tx{item.tx_index}-inp{item.obj_index}'
+
+
+@pytest.fixture(params=get_prepared_inp_out('inputs'), ids=inp_out_id)
 def inp(request):
     return request.param.copy()
 
 
+@pytest.fixture(params=get_prepared_inp_out('outputs'), ids=inp_out_id)
+def out(request):
+    return request.param.copy()
+
+
+def _test_copy(instance, eq_attrs, is_attrs):
+    copied = instance.copy()
+
+    assert copied is not instance
+
+    for attr in eq_attrs:
+        assert getattr(copied, attr) == getattr(instance, attr)
+
+    for attr in is_attrs:
+        assert getattr(copied, attr) is getattr(instance, attr)
+
+
 class TestInput:
     def test_copy(self, inp):
-        copied = inp.instance.copy()
-
-        assert copied is not inp.instance
-
-        for attr in ('tx_id', 'out_index', 'amount'):
-            assert getattr(copied, attr) == getattr(inp.instance, attr)
-
-        for attr in ('pv', 'address'):
-            assert getattr(copied, attr) is getattr(inp.instance, attr)
+        return _test_copy(inp.instance, ['tx_id', 'out_index', 'amount'], ['pv', 'address'])
 
     def test_serialize(self, inp):
         assert inp.serialized == inp.instance.serialize().hex()
+
+
+class TestOutput:
+    def test_copy(self, out):
+        return _test_copy(out.instance, ['script_pub_key', 'amount'], ['address'])
