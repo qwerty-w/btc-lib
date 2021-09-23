@@ -16,6 +16,12 @@ class Script:
     def __len__(self) -> int:
         return len(self.script)
 
+    def __eq__(self, other: Script):
+        if isinstance(other, Script):
+            return self.script == other.script
+
+        return NotImplemented
+
     @staticmethod
     def _validate_data(raw_data: Iterable) -> list[str]:
         _data = []
