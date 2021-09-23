@@ -17,17 +17,20 @@
             {
                 "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
                 "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
-                "amount": 437719
+                "amount": 437719,
+                "serialized": "d7ad06000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
             },
             {
                 "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
                 "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
-                "amount": 437719
+                "amount": 437719,
+                "serialized": "d7ad0600000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
             },
             {
                 "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
                 "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
-                "amount": 437719
+                "amount": 437719,
+                "serialized": "d7ad06000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
             }
         ],
         "fee": 10000,
@@ -53,17 +56,22 @@
             {
                 "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
                 "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
             },
             {
                 "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
                 "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c0200000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
+
             },
             {
                 "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
                 "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c02000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
+
             }
         ],
         "fee": 10000,
@@ -89,17 +97,23 @@
             {
                 "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
                 "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
+
             },
             {
                 "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
                 "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c02000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
+
             },
             {
                 "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
                 "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c02000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
+
             }
         ],
         "fee": 10000,
@@ -125,17 +139,23 @@
             {
                 "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
                 "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
+
             },
             {
                 "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
                 "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c02000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
+
             },
             {
                 "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
                 "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
-                "amount": 142573
+                "amount": 142573,
+                "serialized": "ed2c0200000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
+
             }
         ],
         "fee": 10000,

@@ -57,16 +57,19 @@ def get_prepared_inp_out(attr):
     return prepared
 
 
-def inp_out_id(item):
-    return f'tx{item.tx_index}-inp{item.obj_index}'
+def inp_out_id(name):
+    def wrapper(item):
+        return f'tx{item.tx_index}-{name}{item.obj_index}'
+
+    return wrapper
 
 
-@pytest.fixture(params=get_prepared_inp_out('inputs'), ids=inp_out_id)
+@pytest.fixture(params=get_prepared_inp_out('inputs'), ids=inp_out_id('inp'))
 def inp(request):
     return request.param.copy()
 
 
-@pytest.fixture(params=get_prepared_inp_out('outputs'), ids=inp_out_id)
+@pytest.fixture(params=get_prepared_inp_out('outputs'), ids=inp_out_id('out'))
 def out(request):
     return request.param.copy()
 
@@ -94,3 +97,6 @@ class TestInput:
 class TestOutput:
     def test_copy(self, out):
         return _test_copy(out.instance, ['script_pub_key', 'amount'], ['address'])
+
+    def test_serialize(self, out):
+        assert out.serialized == out.instance.serialize().hex()
