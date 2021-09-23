@@ -80,6 +80,9 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
             ('out_index', self.out_index)
         ]
 
+        if self.amount is not None:
+            items.append(('amount', self.amount))
+
         if address and self.address:
             items = [('address', self.address.string), *items]
 
