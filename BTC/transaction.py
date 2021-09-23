@@ -219,7 +219,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
 
     def copy(self) -> Output:
         return Output(
-            self.script_pub_key,
+            self.address if self.address is not None else self.script_pub_key,
             self.amount
         )
 
