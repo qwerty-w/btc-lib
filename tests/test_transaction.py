@@ -74,16 +74,22 @@ def out(request):
     return request.param.copy()
 
 
-def _test_copy(instance, eq_attrs, is_attrs):
+def _test_copy(instance, eq_=(), is_=(), eq_not=(), is_not=()):
     copied = instance.copy()
+    funcs = [
+        lambda at: getattr(copied, at) == getattr(instance, at),
+        lambda at: getattr(copied, at) is getattr(instance, at)
+    ]
 
     assert copied is not instance
 
-    for attr in eq_attrs:
-        assert getattr(copied, attr) == getattr(instance, attr)
+    for func, attrs in zip(funcs, [eq_, is_]):
+        for attr in attrs:
+            assert func(attr)
 
-    for attr in is_attrs:
-        assert getattr(copied, attr) is getattr(instance, attr)
+    for func, attrs in zip(funcs, [eq_not, is_not]):
+        for attr in attrs:
+            assert not func(attr)
 
 
 class TestInput:
@@ -100,3 +106,9 @@ class TestOutput:
 
     def test_serialize(self, out):
         assert out.serialized == out.instance.serialize().hex()
+
+
+class TestTransaction:
+    def test_copy(self, tx):
+        _test_copy(tx, ['version', 'locktime'], is_not=['inputs', 'outputs'])
+
