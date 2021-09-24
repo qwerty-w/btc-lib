@@ -126,6 +126,15 @@ class TestTransaction:
     def test_get_id(self, tx):
         assert tx.id == tx.instance.get_id()
 
+    def test_default_sign(self, tx):
+        for instance_inp, tx_inp in zip(tx.instance.inputs, tx.inputs):
+            instance_inp.custom_sign(None, None)
+            instance_inp.default_sign(tx.instance)
+
+            for attr in 'script', 'witness':
+                tx_inp_val = getattr(tx_inp, attr)
+                assert getattr(instance_inp, attr).to_hex() == '' if tx_inp_val is None else tx_inp_val
+
     def test_serialize(self, tx):
         assert tx.serialized == tx.instance.serialize()
 
