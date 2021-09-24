@@ -74,11 +74,19 @@ def out(request):
     return request.param.copy()
 
 
+def ga_eq(ins1, ins2, at):
+    return getattr(ins1, at) == getattr(ins2, at)
+
+
+def ga_is(ins1, ins2, at):
+    return getattr(ins1, at) is getattr(ins2, at)
+
+
 def _test_copy(instance, eq_=(), is_=(), eq_not=(), is_not=()):
     copied = instance.copy()
     funcs = [
-        lambda at: getattr(copied, at) == getattr(instance, at),
-        lambda at: getattr(copied, at) is getattr(instance, at)
+        lambda at: ga_eq(copied, instance, at),
+        lambda at: ga_is(copied, instance, at)
     ]
 
     assert copied is not instance
@@ -120,3 +128,26 @@ class TestTransaction:
 
     def test_serialize(self, tx):
         assert tx.serialized == tx.instance.serialize()
+
+    def test_deserialize(self, tx):
+        des = Transaction.deserialize(tx.serialized)
+
+        for attr in 'inputs', 'outputs':
+            assert len(getattr(des, attr)) == len(getattr(tx, attr))
+
+        for des_inp, tx_inp in zip(des.inputs, tx.inputs):
+            for attr in 'tx_id', 'out_index':
+                assert ga_eq(des_inp, tx_inp, attr)
+
+            for attr in 'script', 'witness':
+                tx_inp_attr = getattr(tx_inp, attr)
+                assert getattr(des_inp, attr).to_hex() == '' if tx_inp_attr is None else tx_inp_attr
+
+        for des_out, tx_out in zip(des.outputs, tx.outputs):
+            assert des_out.script_pub_key.to_hex() == tx_out.script_pub_key
+            assert ga_eq(des_out, tx_out, 'amount')
+
+        for attr in 'version', 'locktime':
+            assert ga_eq(des, tx, attr)
+
+        assert des.serialize() == tx.serialized
