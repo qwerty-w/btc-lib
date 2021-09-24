@@ -117,3 +117,6 @@ class TestTransaction:
 
     def test_get_id(self, tx):
         assert tx.id == tx.instance.get_id()
+
+    def test_serialize(self, tx):
+        assert tx.serialized == tx.instance.serialize()
