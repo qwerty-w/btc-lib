@@ -112,3 +112,5 @@ class TestTransaction:
     def test_copy(self, tx):
         _test_copy(tx, ['version', 'locktime'], is_not=['inputs', 'outputs'])
 
+    def test_has_segwit_input(self, tx):
+        assert all(inp.witness for inp in tx.inputs) is tx.instance.has_segwit_input()
