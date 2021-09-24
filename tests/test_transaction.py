@@ -114,3 +114,6 @@ class TestTransaction:
 
     def test_has_segwit_input(self, tx):
         assert all(inp.witness for inp in tx.inputs) is tx.instance.has_segwit_input()
+
+    def test_get_id(self, tx):
+        assert tx.id == tx.instance.get_id()
