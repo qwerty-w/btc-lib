@@ -27,6 +27,9 @@ class Script:
         _data = []
 
         for index, item in enumerate(raw_data):
+            if not len(item):
+                continue
+
             if isinstance(item, str):
 
                 if not item.startswith('OP_'):
