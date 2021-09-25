@@ -58,7 +58,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         self.amount = uint64(amount) if amount is not None else amount
         self.sequence = uint32(sequence)
 
-        self.script = Script()
+        self.script = Script()  # ScriptSig
         self.witness = Script()
 
     def __repr__(self):
