@@ -123,9 +123,9 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         The last three use a witness (tx.get_hash4sign(segwit=True))
         """
         if not isinstance(self.pv, PrivateKey):
-            raise exceptions.ForDefaultSignPrivateKeyMustBeSet
+            raise exceptions.DefaultSignRequiresPrivateKey
         if not isinstance(self.address, BitcoinAddress):
-            raise exceptions.ForDefaultSignAddressMustBeSet
+            raise exceptions.DefaultSignRequiresAddress
 
         try:
             index = tx.inputs.index(self)
