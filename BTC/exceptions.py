@@ -68,6 +68,16 @@ class InvalidByteorder(exc):
     msg = 'byteorder must be either "little" or "big", but {} received'
 
 
+class InvalidSignatureLength(exc):
+    cls = ValueError
+    msg = 'decoded signature length should be 65, but {} received'
+
+
+class InvalidRecoveryID(exc):
+    cls = ValueError
+    msg = 'recovery id should be 27 <= rec_id <= 34, but {} received'
+
+
 class UnsupportedAddressType(exc):
     cls = TypeError
     msg = 'unsupported type {}, supported only P2PKH, P2SH (P2SH-P2WPKH), P2WPKH, P2WSH'
@@ -107,14 +117,14 @@ class SegwitHash4SignRequiresInputAmount(exc):
     msg = 'for Transaction.get_hash4sign(input_index, ..., segwit=True) requires Input.amount is not None'
 
 
-class ForDefaultSignPrivateKeyMustBeSet(exc):
+class DefaultSignRequiresPrivateKey(exc):
     cls = ValueError
-    msg = 'for Input.default_sign() need set Input.pv = PrivateKey()'
+    msg = 'Input.pv (PrivateKey) required for the default_sign is not set or set to a different type'
 
 
-class ForDefaultSignAddressMustBeSet(exc):
+class DefaultSignRequiresAddress(exc):
     cls = ValueError
-    msg = 'for Input.default_sign() need set Input.address = BitcoinAddress()'
+    msg = 'Input.address (BitcoinAddress) required for the default_sign is not set or set to a different type'
 
 
 class FailedToGetTransactionData(exc):

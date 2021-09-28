@@ -155,6 +155,17 @@ def bytes2int(value: bytes, byteorder: str = 'big', *, signed: bool = False) -> 
     return int.from_bytes(value, byteorder, signed=signed)
 
 
+def get_magic_hash(message: str):
+    pref = b'Bitcoin Signed Message:\n'
+    message = message.encode()
+    return get_2sha256(b''.join([
+        int2bytes(len(pref)),
+        pref,
+        int2bytes(len(message)),
+        message
+    ]))
+
+
 def get_2sha256(data: bytes) -> bytes:
     return sha256(sha256(data).digest()).digest()
 

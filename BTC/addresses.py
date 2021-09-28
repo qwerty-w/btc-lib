@@ -1,15 +1,17 @@
 from __future__ import annotations  # need for postponed evaluation of annotations (pep 563) / remove in python3.10
 
+import base64
 from abc import ABC, abstractmethod
 from hashlib import sha256, new as hashlib_new
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
-from ecdsa.util import sigencode_der
+from ecdsa.keys import BadSignatureError
+from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
 from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
 import exceptions
 from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
-from utils import get_2sha256, get_address_network, validate_address, get_address_type
+from utils import get_2sha256, get_address_network, validate_address, get_address_type, get_magic_hash, int2bytes
 from script import Script
 from services import NetworkAPI, Unspent
 import bech32
@@ -50,8 +52,20 @@ class PrivateKey:
     def _get_public_key(self) -> PublicKey:
         return PublicKey('04' + self.key.get_verifying_key().to_string().hex())
 
+    def sign_message(self, message: str, *, compressed: bool = True) -> str:
+        digest = get_magic_hash(message)
+        sig = self.key.sign_digest_deterministic(digest, hashfunc=sha256, sigencode=sigencode_string)
+
+        rec_id = 31 if compressed else 27
+        keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
+        for i, key in enumerate(keys):
+            if key.to_string() == self.pub.bytes:
+                rec_id += i
+                break
+        return base64.b64encode(int2bytes(rec_id) + sig).decode()
+
     def sign_tx(self, tx_hash: bytes, sighash: int = SIGHASHES['all']) -> str:
-        sig = self.key.sign_digest_deterministic(tx_hash, sigencode=sigencode_der, hashfunc=sha256)
+        sig = self.key.sign_digest_deterministic(tx_hash, hashfunc=sha256, sigencode=sigencode_der)
 
         pref = sig[0]
         full_len = sig[1]
@@ -107,6 +121,50 @@ class PublicKey:
             self.key = VerifyingKey.from_string(uncompressed_hex_b, curve=SECP256k1)
 
         self.bytes = self.key.to_string()
+
+    @classmethod
+    def from_signed_message(cls, sig_b64: str, message: str):
+        sig = base64.b64decode(sig_b64.encode())
+
+        if len(sig) != 65:
+            raise exceptions.InvalidSignatureLength(len(sig))
+
+        digest = get_magic_hash(message)
+        rec_id, sig = sig[0], sig[1:]
+
+        if 27 <= rec_id <= 30:
+            rec_id -= 27
+
+        elif 31 <= rec_id <= 34:
+            rec_id -= 31
+
+        else:
+            raise exceptions.InvalidRecoveryID(rec_id)
+
+        keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
+        return cls('04' + keys[rec_id].to_string().hex())
+
+    @classmethod
+    def verify_message_for_address(cls, sig_b64: str, message: str, address: str):
+        pub = cls.from_signed_message(sig_b64, message)
+        network = get_address_network(address)
+        address_type = get_address_type(address)
+
+        if address_type == 'P2SH':
+            address_type = 'P2SH-P2WPKH'
+
+        if pub.get_address(address_type, network).string == address:
+            return True
+
+        return False
+
+    def verify_message(self, sig_b64: str, message: str):
+        magic_hash = get_magic_hash(message)
+        return self.key.verify_digest(
+            base64.b64decode(sig_b64.encode())[1:],
+            magic_hash,
+            sigdecode=sigdecode_string
+        )
 
     def get_hash160(self, *, compressed: bool = True) -> str:
         h = sha256(bytes.fromhex(self.to_hex(compressed=compressed))).digest()
