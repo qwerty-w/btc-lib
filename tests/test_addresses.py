@@ -18,7 +18,7 @@ def address(request, unit, address_type):
     return address
 
 
-class TestPrivateKey:
+class TestPrivatePublicKey:
     def test_private_key_creation(self, unit, compressed, network):  # test PrivateKey._from_wif
         instance = PrivateKey(unit.pv.wif[compressed.string][network])
 
@@ -29,6 +29,22 @@ class TestPrivateKey:
         instance = PrivateKey(wif)
 
         assert instance.to_wif(network, compressed=compressed.bool) == wif
+
+    def test_private_key_sign_message(self, message):
+        assert message.unit.pv.instance.sign_message(message.string) == message.sig
+
+    def test_pub_key_from_signed_message(self, message):
+        assert PublicKey.from_signed_message(message.sig, message.string).bytes == message.unit.pub.bytes
+
+    def test_pub_key_verify_message(self, message):
+        assert message.unit.pub.instance.verify_message(message.sig, message.string)
+
+    def test_pub_key_verify_message_for_address(self, message, address_type, network):
+        assert message.unit.pub.instance.verify_message_for_address(
+            message.sig,
+            message.string,
+            message.unit.pub.instance.get_address(address_type, network).string,
+        )
 
     def test_pub_key_creation(self, unit):
         assert unit.pub.instance.bytes == unit.pub.bytes
