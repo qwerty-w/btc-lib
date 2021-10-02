@@ -158,7 +158,7 @@ def bytes2int(value: bytes, byteorder: str = 'big', *, signed: bool = False) -> 
 def get_magic_hash(message: str):
     pref = b'Bitcoin Signed Message:\n'
     message = message.encode()
-    return get_2sha256(b''.join([
+    return d_sha256(b''.join([
         int2bytes(len(pref)),
         pref,
         int2bytes(len(message)),
@@ -166,7 +166,7 @@ def get_magic_hash(message: str):
     ]))
 
 
-def get_2sha256(data: bytes) -> bytes:
+def d_sha256(data: bytes) -> bytes:  # double sha256
     return sha256(sha256(data).digest()).digest()
 
 
@@ -209,7 +209,7 @@ def validate_address(address: str, address_type: str, address_network: str) -> b
         try:
             address_bytes = b58decode(address.encode('utf-8'))
             address_checksum = address_bytes[-4:]
-            address_hash = get_2sha256(address_bytes[:-4])
+            address_hash = d_sha256(address_bytes[:-4])
         except:
             return False
 

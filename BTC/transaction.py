@@ -5,7 +5,7 @@ from typing import Iterable, Protocol
 import json
 
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
-from utils import get_2sha256, uint32, uint64, sint64, dint
+from utils import d_sha256, uint32, uint64, sint64, dint
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
 from services import Unspent, NetworkAPI
@@ -273,7 +273,7 @@ class _Hash4SignGenerator:  # hash for sign
             tx.inputs = (tx.inputs[self.index])
 
         serialized = tx.serialize(to_bytes=True, exclude_witnesses=True) + self.sighash.pack()
-        return get_2sha256(serialized)
+        return d_sha256(serialized)
 
     def get_segwit(self) -> bytes:
         tx = self.tx.copy()
@@ -306,7 +306,7 @@ class _Hash4SignGenerator:  # hash for sign
 
             outs = out.serialize()
 
-        inps, seq, outs = get_2sha256(inps), get_2sha256(seq), get_2sha256(outs)
+        inps, seq, outs = d_sha256(inps), d_sha256(seq), d_sha256(outs)
 
         main_inp = bytes.fromhex(tx.inputs[self.index].tx_id)[::-1]
         main_inp += tx.inputs[self.index].out_index.pack()
@@ -337,7 +337,7 @@ class _Hash4SignGenerator:  # hash for sign
             sighash
         ])
 
-        return get_2sha256(raw_tx)
+        return d_sha256(raw_tx)
 
 
 class _TransactionDeserializer:
@@ -474,7 +474,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
         self.fee = amount - sum(out.amount for out in self.outputs)
 
     def get_id(self) -> str:
-        return get_2sha256(self.serialize(to_bytes=True, exclude_witnesses=True))[::-1].hex()
+        return d_sha256(self.serialize(to_bytes=True, exclude_witnesses=True))[::-1].hex()
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *,
                       segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
