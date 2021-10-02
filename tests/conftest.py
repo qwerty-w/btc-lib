@@ -1,9 +1,71 @@
 from __future__ import annotations
+from os import path
 import typing
 import json
 import pytest
 
 from addresses import PrivateKey
+
+
+class TestData:
+    UNITS_FP = path.join(path.split(__file__)[0], 'address_units.json')
+    _units = []
+    _messages = []
+
+    @classmethod
+    @property
+    def units(cls) -> list:
+        cls._units = cls._units if len(cls._units) > 0 else cls.get_units()
+        return cls._units
+
+    @classmethod
+    @property
+    def messages(cls) -> list:
+        cls._messages = cls._messages if len(cls._messages) > 0 else cls.get_messages()
+        return cls._messages
+
+    @classmethod
+    def get_units(cls) -> list:
+        with open(cls.UNITS_FP) as f:
+            units = json.load(f)
+
+        for unit in units:
+            unit['pv']['bytes'] = bytes.fromhex(unit['pv']['hex'])
+            unit['pub']['bytes'] = bytes.fromhex(unit['pub']['hex']['uncompressed'][2:])
+
+        return [Unit(unit_data) for unit_data in units]
+
+    @classmethod
+    def get_messages(cls) -> list:
+        messages = []
+
+        for unit_index, unit in enumerate(cls.units):
+            if not getattr(unit, 'messages', False):
+                continue
+
+            for message in unit.messages:
+                message.set_data({'unit_index': unit_index})
+                messages.append(message)
+
+        return messages
+
+    @classmethod
+    def prepare_unit(cls, unit: Unit):  # prepare unit, add instances
+        unit = unit.copy()
+        data = {'pv': (pv := PrivateKey(unit.pv.wif.compressed.mainnet)), 'pub': pv.pub}
+
+        for name, instance in data.items():
+            unit[name].set_data({'instance': instance})
+
+        return unit
+
+    @classmethod
+    def prepare_message(cls, message: GetterObject):  # prepare message, add unit
+        message = message.copy()
+        message.set_data({
+            'unit': cls.prepare_unit(cls.units[message.pop_attr('unit_index')]).copy()
+        })
+        return message
 
 
 class GetterObject:
@@ -26,6 +88,7 @@ class GetterObject:
 
     def _setter(self, data: dict):
         for name, value in data.items():
+            name = self._prepare_name(name)
             setattr(self, name, self._handler(value))
             self._cached_object_attrs.append(name)
 
@@ -40,8 +103,8 @@ class GetterObject:
     def __repr__(self):
         return f'{self.__class__.__name__}({", ".join(sorted(self.get_attrs(), key=str.isupper))})'
 
-    def set_data(self, data: dict):
-        self._setter(data)
+    def copy(self) -> GetterObject:
+        return type(self)(self.get_raw())
 
     def get_attrs(self) -> list:
         return self._cached_object_attrs.copy()
@@ -56,23 +119,17 @@ class GetterObject:
 
         return dict(data)
 
-    def copy(self) -> GetterObject:
-        return type(self)(self.get_raw())
+    def set_data(self, data: dict):
+        self._setter(data)
+
+    def pop_attr(self, attr_name: str):
+        value = getattr(self, attr_name)
+        delattr(self, attr_name)
+        return value
 
 
 class Unit(GetterObject):
     __slots__ = ('pv', 'pub', 'P2PKH', 'P2SH_P2WPKH', 'P2WPKH', 'P2WSH')
-
-
-def get_units(path: str) -> list:
-    with open(path) as f:
-        units = json.load(f)
-
-    for unit in units:
-        unit['pv']['bytes'] = bytes.fromhex(unit['pv']['hex'])
-        unit['pub']['bytes'] = bytes.fromhex(unit['pub']['hex']['uncompressed'][2:])
-
-    return [Unit(unit_data) for unit_data in units]
 
 
 class IsCompressed:
@@ -91,18 +148,14 @@ def compressed(request) -> IsCompressed:
     return request.param
 
 
-@pytest.fixture(params=get_units('address_units.json'))
+@pytest.fixture(params=TestData.units)
 def unit(request):
-    """
-    Prepare unit, add pv and pub instances.
-    """
-    unit = request.param.copy()
-    data = {'pv': (pv := PrivateKey(unit.pv.wif.compressed.mainnet)), 'pub': pv.pub}
+    return TestData.prepare_unit(request.param)
 
-    for name, instance in data.items():
-        unit[name].set_data({'instance': instance})
 
-    return unit
+@pytest.fixture(params=TestData.messages)
+def message(request):
+    return TestData.prepare_message(request.param)
 
 
 def at_id(address_type):
@@ -115,7 +168,6 @@ def address_type(request) -> str:
     :param request: The type of address "P2SH-P2WPKH" is written through a dash because PublicKey.get_address
                     is perceived only in this way.
                     When referring to a unit (GetterObject) itself will replace the dash with an underscore.
-    :return:
     """
     return request.param
 
