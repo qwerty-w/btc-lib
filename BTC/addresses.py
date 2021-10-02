@@ -145,13 +145,25 @@ class PublicKey:
         return cls('04' + keys[rec_id].to_string().hex())
 
     @classmethod
-    def verify_message_for_address(cls, sig_b64: str, message: str, address: str):
+    def verify_message_for_address(cls, sig_b64: str, message: str, address: str) -> bool:
+        """
+        WARNING! Default Bitcoin-Core verify message supports only P2PKH addresses. It's possible because
+        one PublicKey -> one P2PKH addresses.
+        With segwit addresses and P2SH address it gets hard since one PublicKey -> not one P2SH/P2WPKH/P2WSH address.
+        But verify_message_for_address anyway supports all address types, it checks to
+        P2SH/P2WPKH/P2WSH address was generated with PublicKey.get_address algorithm.
+        This means that address could be obtained from same public key just by a different method and
+        verify_message_for_address will be return False, remember this (in this situation you can use
+        PublicKey.from_signed_message() and by self-checking find out that from obtained public key
+        can get needed address). More details: https://github.com/bitcoin/bitcoin/issues/10542
+
+        :param sig_b64: String signature in base64 encoding.
+        :param message: Message for signature.
+        :param address: Address for check
+        """
         pub = cls.from_signed_message(sig_b64, message)
         network = get_address_network(address)
-        address_type = get_address_type(address)
-
-        if address_type == 'P2SH':
-            address_type = 'P2SH-P2WPKH'
+        address_type = 'P2SH-P2WPKH' if (address_type := get_address_type(address)) == 'P2SH' else address_type
 
         if pub.get_address(address_type, network).string == address:
             return True
@@ -160,11 +172,14 @@ class PublicKey:
 
     def verify_message(self, sig_b64: str, message: str):
         magic_hash = get_magic_hash(message)
-        return self.key.verify_digest(
-            base64.b64decode(sig_b64.encode())[1:],
-            magic_hash,
-            sigdecode=sigdecode_string
-        )
+        try:
+            return self.key.verify_digest(
+                base64.b64decode(sig_b64.encode())[1:],
+                magic_hash,
+                sigdecode=sigdecode_string
+            )
+        except BadSignatureError:
+            return False
 
     def get_hash160(self, *, compressed: bool = True) -> str:
         h = sha256(bytes.fromhex(self.to_hex(compressed=compressed))).digest()
