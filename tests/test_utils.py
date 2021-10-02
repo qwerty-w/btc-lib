@@ -182,9 +182,9 @@ class TestDynamicInt:
 
 
 @pytest.mark.repeat(10)
-def test_get_2sha256():
+def test_d_sha256():
     random_data = random.randbytes(64)
-    assert sha256(sha256(random_data).digest()).digest() == get_2sha256(random_data)
+    assert sha256(sha256(random_data).digest()).digest() == d_sha256(random_data)
 
 
 def i2b_id(data):

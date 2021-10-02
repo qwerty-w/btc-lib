@@ -11,7 +11,7 @@ from sympy import sqrt_mod
 
 import exceptions
 from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
-from utils import get_2sha256, get_address_network, validate_address, get_address_type, get_magic_hash, int2bytes
+from utils import d_sha256, get_address_network, validate_address, get_address_type, get_magic_hash, int2bytes
 from script import Script
 from services import NetworkAPI, Unspent
 import bech32
@@ -29,7 +29,7 @@ class PrivateKey:
         key = data[:-4]
         checksum = data[-4:]
 
-        h = get_2sha256(key)
+        h = d_sha256(key)
         if not checksum == h[0:4]:
             raise exceptions.InvalidWif(wif)
 
@@ -40,7 +40,7 @@ class PrivateKey:
 
     def to_wif(self, network: str = DEFAULT_NETWORK, *, compressed: bool = True) -> str:
         data = PREFIXES['wif'][network] + self.key.to_string() + (b'\x01' if compressed else b'')
-        h = get_2sha256(data)
+        h = d_sha256(data)
         checksum = h[0:4]
         wif = b58encode(data + checksum)
 
@@ -280,7 +280,7 @@ class DefaultAddress(BitcoinAddress, ABC):
     @classmethod
     def _b58encode(cls, data: bytes, network: str) -> str:
         raw_address_bytes = cls._get_prefix(network) + data
-        raw_address_hash = get_2sha256(raw_address_bytes)
+        raw_address_hash = d_sha256(raw_address_bytes)
         address = b58encode(raw_address_bytes + raw_address_hash[0:4]).decode('utf-8')
 
         return address
