@@ -234,6 +234,11 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         ])
 
 
+class IOTuple(tuple):
+    def __init__(self, *args, **kwargs):
+        self.amount = sum(values) if None not in (values := [ins.amount for ins in self]) else None
+
+
 class _Hash4SignGenerator:  # hash for sign
     def __init__(self, tx: Transaction, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
         self.tx = tx
@@ -415,12 +420,12 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
                  version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
 
-        self.inputs = tuple(inputs)
-        self.outputs = tuple(outputs)
+        self.inputs = IOTuple(inputs)
+        self.outputs = IOTuple(outputs)
         self.version = uint32(version)
         self.locktime = uint32(locktime)
-        self.amount = sum(values) if None not in (values := [inp.amount for inp in self.inputs]) else None
-        self.fee = self.amount - sum(out.amount for out in self.outputs) if self.amount is not None else None
+        self.amount = self.inputs.amount
+        self.fee = self.inputs.amount - self.outputs.amount if self.inputs.amount is not None else None
 
     def __repr__(self):
         return str(self.as_dict())
