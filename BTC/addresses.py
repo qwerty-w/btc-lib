@@ -20,7 +20,16 @@ import bech32
 
 class PrivateKey:
     def __init__(self, wif: str | None = None):
-        self.key = self._from_wif(wif) if wif else SigningKey.generate(curve=SECP256k1)
+        if hasattr(self, '_from_bytes'):
+            key = SigningKey.from_string(self._from_bytes, SECP256k1)
+
+        elif wif is None:
+            key = SigningKey.generate(SECP256k1)
+
+        else:
+            key = self._from_wif(wif)
+
+        self.key = key
         self.pub = self._get_public_key()
         self.bytes = self.key.to_string()
 
@@ -37,7 +46,15 @@ class PrivateKey:
         key = key[1:]  # network
         key = key[:-1] if len(key) > 32 else key
 
-        return SigningKey.from_string(key, curve=SECP256k1)
+        return SigningKey.from_string(key, SECP256k1)
+
+    @classmethod
+    def from_bytes(cls, pv_bytes: bytes):
+        ins = cls.__new__(cls)
+        ins._from_bytes = pv_bytes
+        ins.__init__()
+        del ins._from_bytes
+        return ins
 
     def to_wif(self, network: str = DEFAULT_NETWORK, *, compressed: bool = True) -> str:
         data = PREFIXES['wif'][network] + self.key.to_string() + (b'\x01' if compressed else b'')
@@ -55,7 +72,7 @@ class PrivateKey:
 
     def sign_message(self, message: str, *, compressed: bool = True) -> str:
         digest = get_magic_hash(message)
-        sig = self.key.sign_digest_deterministic(digest, hashfunc=sha256, sigencode=sigencode_string)
+        sig = self.key.sign_digest_deterministic(digest, sha256, sigencode_string)
 
         rec_id = 31 if compressed else 27
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
@@ -66,7 +83,7 @@ class PrivateKey:
         return base64.b64encode(int2bytes(rec_id) + sig).decode()
 
     def sign_tx(self, tx_hash: bytes, sighash: int = SIGHASHES['all']) -> str:
-        sig = self.key.sign_digest_deterministic(tx_hash, hashfunc=sha256, sigencode=sigencode_der)
+        sig = self.key.sign_digest_deterministic(tx_hash, sha256, sigencode_der)
 
         pref = sig[0]
         full_len = sig[1]
@@ -110,7 +127,7 @@ class PublicKey:
             uncompressed_hex = '%0.64X%0.64X' % (x_coord, y_coord)
             pb_bytes = bytes.fromhex(uncompressed_hex)
 
-        self.key = VerifyingKey.from_string(pb_bytes, curve=SECP256k1)
+        self.key = VerifyingKey.from_string(pb_bytes, SECP256k1)
         self.bytes = self.key.to_string()
 
     @classmethod
