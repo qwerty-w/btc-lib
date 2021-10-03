@@ -1,147 +1,118 @@
 from __future__ import annotations
-from abc import ABC
-from decimal import Decimal
-import re
+from string import Formatter
 
 
-class exc(Exception, ABC):
-    cls: BaseException | None = Exception
-    msg: str = 'default exception'
+class Error(Exception):
+    msg: str
+    unknown_value = '<unknown>'
 
-    def __new__(cls, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
 
-        if cls.cls is None:
-            return super().__new__(cls, *args, **kwargs)
+        for _ in range(sum(1 for x in Formatter().parse(self.msg) if x[1] is not None) - len(args)):
+            args += self.unknown_value,
 
-        if len(args) > 0 and type(args[0]) is cls.cls:  # raise Exception (without call) == Exception(Exception())
-            return args[0]
+        self.msg = self.msg.format(*args, **kwargs)
 
-        if BaseException in cls.cls.__mro__:
-            count = len(re.findall('\{\}', cls.msg))
-
-            if count > len(args):
-                args += tuple('<unknown>' for _ in range(count - (len(args) + len(kwargs))))
-
-            return cls.cls(cls.msg.format(*args, **kwargs))
-
-        else:
-            raise TypeError(f'{cls.cls} must inherit from BaseException')
+    def __str__(self):
+        return self.msg
 
 
-class InvalidAddress(exc):
-    cls = ValueError
-    msg = 'invalid address {} (with type {} and network {})'
+class InvalidError(Error):
+    msg = 'INVALID ERROR'
 
 
-class InvalidAddressClassType(exc):
-    cls = TypeError
-    msg = 'invalid address class-type - {}, use addresses.P2[KH/SH/WPKH/WSH]'
+class InvalidAddress(InvalidError):
+    msg = 'invalid address - {} (type - {}, network - {})'
 
 
-class InvalidHash160(exc):
-    cls = ValueError
+class InvalidAddressInstanceType(InvalidError):
+    msg = 'invalid address instance - {}'
+
+
+class InvalidHash160(InvalidError):
     msg = 'invalid hash160 - {}'
 
 
-class InvalidWif(exc):
-    cls = ValueError
+class InvalidWIF(InvalidError):
     msg = 'invalid WIF (checksum not verified) - {}'
 
 
-class InvalidScriptPubKey(exc):
-    cls = ValueError
-    msg = 'invalid script_pub_key - {}'
+class InvalidCompressionFormat(InvalidError):
+    msg = 'invalid compression format - {}'
 
 
-class InvalidHexOrOpcode(exc):
-    cls = ValueError
-    msg = 'hex or opcode (OP_<...>) expected, but \'{}\' received'
+class InvalidScriptPubKey(InvalidError):
+    msg = 'invalid scriptPubKey - {}'
 
 
-class InvalidInputScriptData(exc):
-    cls = TypeError
-    msg = 'args type must be str, bytes or int, but {} received'
+class InvalidHexOrOpcode(InvalidError):
+    msg = 'hex/opcode expected, \'{}\' received'
 
 
-class InvalidByteorder(exc):
-    cls = ValueError
-    msg = 'byteorder must be either "little" or "big", but {} received'
+class InvalidInputScriptData(InvalidError):
+    msg = 'str/bytes/int expected, {} received'
 
 
-class InvalidSignatureLength(exc):
-    cls = ValueError
+class InvalidByteorder(InvalidError):
+    msg = '"little"/"big" expected, {} received'
+
+
+class InvalidSignatureLength(InvalidError):
     msg = 'decoded signature length should be 65, but {} received'
 
 
-class InvalidRecoveryID(exc):
-    cls = ValueError
+class InvalidRecoveryID(InvalidError):
     msg = 'recovery id should be 27 <= rec_id <= 34, but {} received'
 
 
-class UnsupportedAddressType(exc):
-    cls = TypeError
-    msg = 'unsupported type {}, supported only P2PKH, P2SH (P2SH-P2WPKH), P2WPKH, P2WSH'
+class UnsupportError(Error):
+    msg = 'UNSUPPORT ERROR'
 
 
-class UnsupportedSegwitVersion(exc):
-    cls = TypeError
-    msg = 'unsupported segwit version: {}'
+class UnsupportedAddressType(UnsupportError):
+    msg = 'unsupported type - {}, support only P2PKH, P2SH-P2WPKH (P2SH class), P2WPKH, P2WSH'
 
 
-class DefaultSignSupportOnlyP2shP2wpkh(exc):
-    cls = TypeError
-    msg = 'from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received'
+class DefaultSignError(Error):
+    msg = 'DEFAULT_SIGN ERROR'
 
 
-class OutAmountMoreInputAmount(exc):
-    cls = ArithmeticError
-    msg = 'output amount ({}) more than input amount ({})'
-
-
-class RemainderAddressRequired(exc):
-    cls = None
-    msg = 'input sum {}, output sum {}, remainder {}, need remainder address'
-
-    def __init__(self, inp_amount: Decimal, out_amount: Decimal):
-        self.args = (self.msg.format(inp_amount, out_amount, inp_amount - out_amount),)
-
-
-class SighashSingleRequiresInputAndOutputWithSameIndexes(exc):
-    cls = ValueError
-    msg = 'sighash single signs the output with the same index as the input, the input index is {}, output with ' \
-          'that index do not exists'
-
-
-class SegwitHash4SignRequiresInputAmount(exc):
-    cls = TypeError
-    msg = 'for Transaction.get_hash4sign(input_index, ..., segwit=True) requires Input.amount is not None'
-
-
-class DefaultSignRequiresPrivateKey(exc):
-    cls = ValueError
-    msg = 'Input.pv (PrivateKey) required for the default_sign is not set or set to a different type'
-
-
-class DefaultSignRequiresAddress(exc):
-    cls = ValueError
+class DefaultSignRequiresAddress(DefaultSignError):
     msg = 'Input.address (BitcoinAddress) required for the default_sign is not set or set to a different type'
 
 
-class FailedToGetTransactionData(exc):
-    cls = ConnectionError
-    msg = 'failed to get transaction {} data'
+class DefaultSignRequiresPrivateKey(DefaultSignError):
+    msg = 'Input.pv (PrivateKey) required for the default_sign is not set or set to a different type'
 
 
-class IntSizeGreaterThanMaxSize(exc):
-    cls = OverflowError
+class DefaultSignSupportOnlyP2shP2wpkh(DefaultSignError):
+    msg = 'from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received'
+
+
+class OutAmountMoreInputAmount(Error):
+    msg = 'output amount ({}) more than input amount ({})'
+
+
+class SighashSingleRequiresInputAndOutputWithSameIndexes(Error):
+    msg = 'sighash single signs the output with the same index as the input, the input index is {}, output with ' \
+          'that index don\'t exists'
+
+
+class SegwitHash4SignRequiresInputAmount(Error):
+    msg = 'for Transaction.get_hash4sign(input_index, ..., segwit=True) requires Input.amount is not None'
+
+
+class FailedToGetTransactionData(Error):
+    msg = 'failed to connect to get transaction {} data'
+
+
+class IntSizeGreaterThanMaxSize(Error):
     msg = 'received int ({}) is greater than the max size ({} bytes)'
 
 
-class HexLengthMustBeMultipleTwo(exc):
-    cls = ValueError
+class HexLengthMustBeMultipleTwo(Error):
     msg = 'hex expected, his length multiple of two'
 
 
-class DynamicIntOnlySupportsUnsignedInt(exc):
-    cls = ValueError
+class DynamicIntOnlySupportsUnsignedInt(Error):
     msg = 'dint only supports unsigned int, but {} received'

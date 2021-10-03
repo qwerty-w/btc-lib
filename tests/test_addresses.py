@@ -33,6 +33,15 @@ class TestPrivatePublicKey:
     def test_private_key_sign_message(self, message):
         assert message.unit.pv.instance.sign_message(message.string) == message.sig
 
+    def test_pub_key_creation(self, unit, compressed):
+        assert unit.pub.instance.bytes == unit.pub.bytes == PublicKey(unit.pub.hex[compressed.string]).bytes
+
+    def test_pub_key_to_hex(self, unit, compressed):
+        assert unit.pub.instance.to_hex(compressed=compressed.bool) == unit.pub.hex[compressed.string]
+
+    def test_pub_key_hash160(self, unit, compressed):
+        assert unit.pub.instance.get_hash160(compressed=compressed.bool) == unit.pub.hash160[compressed.string]
+
     def test_pub_key_from_signed_message(self, message):
         assert PublicKey.from_signed_message(message.sig, message.string).bytes == message.unit.pub.bytes
 
@@ -45,15 +54,6 @@ class TestPrivatePublicKey:
             message.string,
             message.unit.pub.instance.get_address(address_type, network).string,
         )
-
-    def test_pub_key_creation(self, unit):
-        assert unit.pub.instance.bytes == unit.pub.bytes
-
-    def test_pub_key_to_hex(self, unit, compressed):
-        assert unit.pub.instance.to_hex(compressed=compressed.bool) == unit.pub.hex[compressed.string]
-
-    def test_pub_key_hash160(self, unit, compressed):
-        assert unit.pub.instance.get_hash160(compressed=compressed.bool) == unit.pub.hash160[compressed.string]
 
 
 class TestAddresses:

@@ -158,7 +158,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
             self.witness = sig
 
         else:
-            raise exceptions.InvalidAddressClassType(type(self.address))
+            raise exceptions.InvalidAddressInstanceType(type(self.address))
 
     def custom_sign(self, signed_script: Script | str, witness: Script | str):
         for name, value in [('script', signed_script), ('witness', witness)]:
@@ -189,7 +189,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
                 instance = instance if isinstance(instance, Script) else Script.from_raw(instance)
 
         elif not isinstance(instance, BitcoinAddress):
-            raise exceptions.InvalidAddressClassType(type(instance))
+            raise exceptions.InvalidAddressInstanceType(type(instance))
 
         self.address = instance if isinstance(instance, BitcoinAddress) else None
         self.script_pub_key = self.address.script_pub_key if isinstance(instance, BitcoinAddress) else instance

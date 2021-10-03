@@ -11,7 +11,8 @@ from sympy import sqrt_mod
 
 import exceptions
 from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
-from utils import d_sha256, get_address_network, validate_address, get_address_type, get_magic_hash, int2bytes
+from utils import d_sha256, get_address_network, validate_address, \
+    get_address_type, get_magic_hash, int2bytes, bytes2int
 from script import Script
 from services import NetworkAPI, Unspent
 import bech32
@@ -31,7 +32,7 @@ class PrivateKey:
 
         h = d_sha256(key)
         if not checksum == h[0:4]:
-            raise exceptions.InvalidWif(wif)
+            raise exceptions.InvalidWIF(wif)
 
         key = key[1:]  # network
         key = key[:-1] if len(key) > 32 else key
@@ -94,32 +95,22 @@ class PrivateKey:
 
 
 class PublicKey:
-    def __init__(self, hex_: str):
+    def __init__(self, pb_hex: str):
+        pb_bytes = bytes.fromhex(pb_hex)
+        fb, pb_bytes = pb_bytes[0], pb_bytes[1:]
 
-        fb = hex_[:2]
-        hex_b = bytes.fromhex(hex_)
-
-        if len(hex_b) > 33:  # compressed check
-            self.key = VerifyingKey.from_string(hex_b[1:], curve=SECP256k1)
-
-        else:
-            x_coord = int(hex_[2:], 16)
+        if len(pb_bytes) <= 33:  # compressed check
+            x_coord = bytes2int(pb_bytes)
             y_values = sqrt_mod((x_coord ** 3 + 7) % P, P, True)
+            even, odd = sorted(y_values, key=lambda x: x % 2 != 0)
+            y_coord = even if fb == 0x02 else odd if fb == 0x03 else None
 
-            if fb == '02':
-                y_coord = y_values[0] if y_values[0] % 2 == 0 else y_values[1]
-
-            elif fb == '03':
-                y_coord = y_values[1] if y_values[0] % 2 == 0 else y_values[0]
-
-            else:
-                raise ValueError('invalid compressed format')
-
+            if y_coord is None:
+                raise exceptions.InvalidCompressionFormat(pb_hex)
             uncompressed_hex = '%0.64X%0.64X' % (x_coord, y_coord)
-            uncompressed_hex_b = bytes.fromhex(uncompressed_hex)
+            pb_bytes = bytes.fromhex(uncompressed_hex)
 
-            self.key = VerifyingKey.from_string(uncompressed_hex_b, curve=SECP256k1)
-
+        self.key = VerifyingKey.from_string(pb_bytes, curve=SECP256k1)
         self.bytes = self.key.to_string()
 
     @classmethod
@@ -347,7 +338,7 @@ def get_address(address: str) -> BitcoinAddress:
         'P2SH': P2SH,
         'P2WPKH': P2WPKH,
         'P2WSH': P2WSH
-    }.get(addr_type, None)
+    }.get(addr_type)
 
     if cls is None:
         raise exceptions.InvalidAddress(address)
