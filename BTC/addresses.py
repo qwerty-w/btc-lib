@@ -347,7 +347,7 @@ class P2WSH(SegwitAddress):
     type = 'P2WSH'
 
 
-def get_address(address: str) -> BitcoinAddress:
+def from_string(address: str) -> BitcoinAddress:
     addr_type = get_address_type(address)
 
     cls = {
