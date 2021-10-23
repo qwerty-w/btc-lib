@@ -5,7 +5,7 @@ from typing import Iterable, Protocol
 import json
 
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
-from utils import d_sha256, uint32, uint64, sint64, dint
+from utils import d_sha256, uint32, uint64, sint64, dint, pprint_class
 from address import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
 from services import NetworkAPI, Unspent
@@ -69,10 +69,12 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
         if self.address:
             args['address'] = self.address
+        if self.amount:
+            args['amount'] = self.amount
         if self.sequence != DEFAULT_SEQUENCE:
             args['sequence'] = self.sequence
 
-        return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
+        return pprint_class(self, kwargs=args)
 
     def as_dict(self, *, address: bool = True, script: bool = True, witness: bool = True) -> dict:
         items = [
@@ -196,11 +198,15 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         self.amount = uint64(amount) if amount >= 0 else sint64(amount)
 
     def __repr__(self):
-        args = dict([
-            ('script_pub_key', self.script_pub_key) if self.address is None else ('address', self.address),
-            ('amount', self.amount)
-        ])
-        return '{}({})'.format(self.__class__.__name__, ' , '.join(f'{name}={value}' for name, value in args.items()))
+        if self.address is None:
+            f_arg, f_value = ('script_pub_key', repr(self.script_pub_key.to_hex()))
+        else:
+            f_arg, f_value = ('address', self.address)
+
+        return pprint_class(self, kwargs={
+            f_arg: f_value,
+            'amount': self.amount
+        })
 
     def as_dict(self, *, address_as_script: bool = False) -> dict:
         dict_ = {}

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any, Iterable
 from abc import ABC, abstractmethod
 from base58check import b58decode
 from hashlib import sha256
@@ -234,3 +235,15 @@ def to_satoshis(value: float) -> int:
 
 def to_bitcoins(value: int) -> float:
     return float(Decimal(str(value)) / 100000000)
+
+
+def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}):
+    cls = class_or_instance if isinstance(class_or_instance, type) else type(class_or_instance)
+    name = cls.__qualname__
+    all_args = ', '.join(
+        [
+            *(f'{value}' for value in args),
+            *(f'{arg}={value}' for arg, value in kwargs.items())
+        ]
+    )
+    return f'{name}({all_args})'
