@@ -64,7 +64,6 @@ SIGHASHES = {
     'anyonecanpay': 0x80
 }
 
-# noinspection SpellCheckingInspection
 OP_CODES = {
     # constants
     'OP_0'                  : b'\x00',

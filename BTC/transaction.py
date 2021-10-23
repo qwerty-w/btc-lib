@@ -8,7 +8,7 @@ from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES
 from utils import d_sha256, uint32, uint64, sint64, dint
 from addresses import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
-from services import Unspent, NetworkAPI
+from services import NetworkAPI, Unspent
 import exceptions
 
 
@@ -101,7 +101,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
     @classmethod
     def from_unspent(cls, unspent: Unspent, pv: PrivateKey | None = None,
                      address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE) -> Input:
-        return cls(unspent.txid, unspent.txindex, unspent.amount, pv, address, sequence)
+        return cls(unspent.tx_id, unspent.out_index, unspent.amount, pv, address, sequence)
 
     def copy(self) -> Input:
         instance = Input(
