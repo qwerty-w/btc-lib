@@ -39,8 +39,8 @@ class SupportsCopy(Protocol):
 
 
 class Input(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, tx_id: str, out_index: int, amount: int | None = None, pv: PrivateKey | None = None,
-                 address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, tx_id: str, out_index: int, amount: int = None, pv: PrivateKey = None,
+                 address: BitcoinAddress = None, sequence: int = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -99,8 +99,8 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     @classmethod
-    def from_unspent(cls, unspent: Unspent, pv: PrivateKey | None = None,
-                     address: BitcoinAddress | None = None, sequence: int = DEFAULT_SEQUENCE) -> Input:
+    def from_unspent(cls, unspent: Unspent, pv: PrivateKey = None, address: BitcoinAddress = None,
+                     sequence: int = DEFAULT_SEQUENCE) -> Input:
         return cls(unspent.tx_id, unspent.out_index, unspent.amount, pv, address, sequence)
 
     def copy(self) -> Input:
@@ -214,7 +214,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         dict_['amount'] = self.amount
         return dict_
 
-    def as_json(self, *, indent: int | None = None, **kwargs) -> str:
+    def as_json(self, *, indent: int = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Output:
@@ -440,7 +440,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
             'locktime': self.locktime
         }
 
-    def as_json(self, *, indent: int | None = None, **kwargs) -> str:
+    def as_json(self, *, indent: int = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Transaction:

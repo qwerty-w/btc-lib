@@ -19,7 +19,7 @@ import bech32
 
 
 class PrivateKey:
-    def __init__(self, wif: str | None = None):
+    def __init__(self, wif: str = None):
         if hasattr(self, '_from_bytes'):
             key = SigningKey.from_string(self._from_bytes, SECP256k1)
 
@@ -250,7 +250,7 @@ class BitcoinAddress(ABC):
     def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
         ...
 
-    def change_network(self, network: str | None = None) -> BitcoinAddress:
+    def change_network(self, network: str = None) -> BitcoinAddress:
         if network == self.network:
             return self
 
