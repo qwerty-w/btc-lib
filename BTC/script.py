@@ -53,7 +53,7 @@ class Script:
 
     @classmethod
     def from_raw(cls, data: str | bytes | list[int], *, segwit: bool = False,
-                 max_items_count: int | None = None) -> Script:
+                 max_items_count: int = None) -> Script:
         script = []
         data = bytes.fromhex(data) if isinstance(data, str) else bytes(data) if isinstance(data, list) else data
 
