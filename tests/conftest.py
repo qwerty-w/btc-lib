@@ -5,6 +5,7 @@ import json
 import pytest
 
 from address import PrivateKey
+from utils import pprint_class
 
 
 class TestData:
@@ -101,7 +102,7 @@ class GetterObject:
         return getattr(self, name)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({", ".join(sorted(self.get_attrs(), key=str.isupper))})'
+        return pprint_class(self, sorted(self.get_attrs(), key=str.isupper))
 
     def copy(self) -> GetterObject:
         return type(self)(self.get_raw())

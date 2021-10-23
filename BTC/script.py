@@ -3,7 +3,7 @@ from typing import Iterable
 
 import exceptions
 from const import OP_CODES, CODE_OPS
-from utils import dint
+from utils import dint, pprint_class
 
 
 class Script:
@@ -11,7 +11,7 @@ class Script:
         self.script = tuple(self._validate_data(data))
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}{str(self.script)}'
+        return pprint_class(self, self.script)
 
     def __len__(self) -> int:
         return len(self.script)

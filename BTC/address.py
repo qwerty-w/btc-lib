@@ -12,7 +12,7 @@ from sympy import sqrt_mod
 import exceptions
 from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
 from utils import d_sha256, get_address_network, validate_address, \
-    get_address_type, get_magic_hash, int2bytes, bytes2int
+    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
 from script import Script
 from services import NetworkAPI, Unspent
 import bech32
@@ -244,7 +244,7 @@ class BitcoinAddress(ABC):
         return self.string
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.__str__().__repr__()})'
+        return pprint_class(self, [self.__str__().__repr__()])
 
     @abstractmethod
     def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
