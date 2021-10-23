@@ -4,7 +4,7 @@ import typing
 import json
 import pytest
 
-from addresses import PrivateKey
+from address import PrivateKey
 
 
 class TestData:

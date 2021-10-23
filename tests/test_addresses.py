@@ -1,5 +1,5 @@
 import pytest
-from addresses import *
+from address import *
 
 
 @pytest.fixture(params=['hash', 'pub'])  # address instance from hash/pub
@@ -56,7 +56,7 @@ class TestPrivatePublicKey:
         )
 
 
-class TestAddresses:
+class TestAddress:
     def test_script_pub_key(self, address):
         assert address.instance.script_pub_key.to_hex() == address.script_pub_key
 
