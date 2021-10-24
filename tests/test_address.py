@@ -31,7 +31,7 @@ class TestPrivatePublicKey:
         assert instance.to_wif(network, compressed=compressed.bool) == wif
 
     def test_private_key_sign_message(self, message):
-        assert message.unit.pv.instance.sign_message(message.string) == message.sig
+        assert message.unit.pv.instance.sign_message(message.string, compressed=message.compressed) == message.sig
 
     def test_pub_key_creation(self, unit, compressed):
         assert unit.pub.instance.bytes == unit.pub.bytes == PublicKey(unit.pub.hex[compressed.string]).bytes
