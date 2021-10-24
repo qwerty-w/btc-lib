@@ -64,7 +64,7 @@ class TestData:
     def prepare_message(cls, message: GetterObject):  # prepare message, add unit
         message = message.copy()
         message.set_data({
-            'unit': cls.prepare_unit(cls.units[message.pop_attr('unit_index')]).copy()
+            'unit': cls.prepare_unit(cls.units[message.unit_index]).copy()
         })
         return message
 
@@ -154,7 +154,11 @@ def unit(request):
     return TestData.prepare_unit(request.param)
 
 
-@pytest.fixture(params=TestData.messages)
+def msg_id(message):
+    return f'unit{message.unit_index}-message'
+
+
+@pytest.fixture(params=TestData.messages, ids=msg_id)
 def message(request):
     return TestData.prepare_message(request.param)
 
