@@ -20,7 +20,7 @@ def prepare_tx(tx):
 
     instance_outs = []
     for out in tx.outputs:
-        instance_outs.append(Output(
+        instance_outs.append(Output.from_script_pub_key(
             out.script_pub_key,  # Output from script pub key
             out.amount
         ))
