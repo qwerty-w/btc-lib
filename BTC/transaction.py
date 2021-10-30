@@ -5,7 +5,7 @@ from typing import Iterable, Protocol
 import json
 
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
-from utils import d_sha256, uint32, uint64, sint64, dint, pprint_class
+from utils import d_sha256, uint32, sint64, dint, pprint_class
 from address import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from script import Script
 from services import NetworkAPI, Unspent
@@ -55,7 +55,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
         self.tx_id = tx_id
         self.out_index = uint32(out_index)
-        self.amount = uint64(amount) if amount is not None else amount
+        self.amount = sint64(amount) if amount is not None else amount
         self.sequence = uint32(sequence)
 
         self.script = Script()  # ScriptSig
@@ -181,21 +181,10 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
 
 class Output(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, address_or_script_pub_key: BitcoinAddress | Script | str, amount: int):
-        instance = address_or_script_pub_key
-
-        if isinstance(instance, (str, Script)):
-            try:
-                instance = from_script_pub_key(instance)
-            except:
-                instance = instance if isinstance(instance, Script) else Script.from_raw(instance)
-
-        elif not isinstance(instance, BitcoinAddress):
-            raise exceptions.InvalidAddressInstanceType(type(instance))
-
-        self.address = instance if isinstance(instance, BitcoinAddress) else None
-        self.script_pub_key = self.address.script_pub_key if isinstance(instance, BitcoinAddress) else instance
-        self.amount = uint64(amount) if amount >= 0 else sint64(amount)
+    def __init__(self, address: BitcoinAddress, amount: int):
+        self.address: BitcoinAddress | None = address
+        self.script_pub_key: Script = self._from_spk if hasattr(self, '_from_spk') else address.script_pub_key
+        self.amount = sint64(amount)
 
     def __repr__(self):
         if self.address is None:
@@ -207,6 +196,21 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
             f_arg: f_value,
             'amount': self.amount
         })
+
+    @classmethod
+    def from_script_pub_key(cls, script: Script | str, amount: int):
+        script = script if isinstance(script, Script) else Script.from_raw(script)
+
+        try:
+            address = from_script_pub_key(script)
+        except:
+            address = None
+
+        ins = cls.__new__(cls)
+        ins._from_spk = script
+        ins.__init__(address, amount)
+        del ins._from_spk
+        return ins
 
     def as_dict(self, *, address_as_script: bool = False) -> dict:
         dict_ = {}
@@ -224,10 +228,10 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     def copy(self) -> Output:
-        return Output(
-            self.address if self.address is not None else self.script_pub_key,
-            self.amount
-        )
+        if self.address is not None:
+            return Output(self.address, self.amount)
+
+        return Output.from_script_pub_key(self.script_pub_key, self.amount)
 
     def serialize(self) -> bytes:
         script_pub_key = self.script_pub_key.to_bytes()
@@ -240,7 +244,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         ])
 
 
-class IOTuple(tuple):
+class IOTuple(tuple):  # inputs/outputs tuple container for Transaction
     def __init__(self, *args, **kwargs):
         self.amount = sum(values) if None not in (values := [ins.amount for ins in self]) else None
 
@@ -274,7 +278,9 @@ class _Hash4SignGenerator:  # hash for sign
             except IndexError:
                 raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(self.index) from None
 
-            tx.outputs = tuple(Output(Script(), NEGATIVE_SATOSHI) for _ in range(self.index)) + (out,)
+            tx.outputs = tuple(
+                Output.from_script_pub_key(Script(), NEGATIVE_SATOSHI) for _ in range(self.index)
+            ) + (out,)
 
             for n, inp in enumerate(tx.inputs):
                 if n != self.index:
@@ -400,7 +406,7 @@ class _TransactionDeserializer:
         # outputs
         outs_count = self.pop_size()
         for _ in range(outs_count):
-            amount = uint64.unpack(self.pop(8))
+            amount = sint64.unpack(self.pop(8))
             data['outputs'].append({
                 'script_pub_key': self.pop(self.pop_size()).hex(),
                 'amount': amount
@@ -477,7 +483,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
                     raise exceptions.FailedToGetTransactionData(inp.tx_id)
 
                 inp_tx = Transaction.deserialize(inp_tx_hex)
-                inp.amount = uint64(inp_tx.outputs[inp.out_index].amount)
+                inp.amount = sint64(inp_tx.outputs[inp.out_index].amount)
 
             amount += inp.amount
 
@@ -529,7 +535,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
         # convert dict outputs to Output objects
         outputs = []
         for out_dict in tx_dict['outputs']:
-            outputs.append(Output(out_dict['script_pub_key'], out_dict['amount']))
+            outputs.append(Output.from_script_pub_key(out_dict['script_pub_key'], out_dict['amount']))
 
         tx_args = {
             'inputs': inputs,
