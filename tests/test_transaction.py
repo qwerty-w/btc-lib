@@ -1,6 +1,7 @@
 import pytest
 import json
 from conftest import GetterObject
+import address
 from transaction import *
 
 
@@ -20,8 +21,8 @@ def prepare_tx(tx):
 
     instance_outs = []
     for out in tx.outputs:
-        instance_outs.append(Output.from_script_pub_key(
-            out.script_pub_key,  # Output from script pub key
+        instance_outs.append(Output(
+            address.from_string(out.address),
             out.amount
         ))
 
@@ -109,6 +110,10 @@ class TestInput:
 
 
 class TestOutput:
+    def test_from_script_pub_key(self, out):
+        fr = Output.from_script_pub_key(out.script_pub_key, out.amount)
+        assert fr.serialize().hex() == out.serialized == out.instance.serialize().hex()
+
     def test_copy(self, out):
         return _test_copy(out.instance, ['script_pub_key', 'amount'], ['address'])
 
