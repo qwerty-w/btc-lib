@@ -6,13 +6,14 @@ import json
 
 from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
 from utils import d_sha256, uint32, sint64, dint, pprint_class
-from address import BitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
+from address import AbstractBitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, Address
 from script import Script
 from services import NetworkAPI, Unspent
 import exceptions
 
 
-def get_inputs(*args: list[PrivateKey, BitcoinAddress] | tuple[PrivateKey, BitcoinAddress]) -> list[Input]:
+def get_inputs(*args: list[PrivateKey, AbstractBitcoinAddress] |
+               tuple[PrivateKey, AbstractBitcoinAddress]) -> list[Input]:
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
@@ -40,7 +41,7 @@ class SupportsCopy(Protocol):
 
 class Input(SupportsDump, SupportsSerialize, SupportsCopy):
     def __init__(self, tx_id: str, out_index: int, amount: int = None, pv: PrivateKey = None,
-                 address: BitcoinAddress = None, sequence: int = DEFAULT_SEQUENCE):
+                 address: AbstractBitcoinAddress = None, sequence: int = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -101,7 +102,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
     @classmethod
-    def from_unspent(cls, unspent: Unspent, pv: PrivateKey = None, address: BitcoinAddress = None,
+    def from_unspent(cls, unspent: Unspent, pv: PrivateKey = None, address: AbstractBitcoinAddress = None,
                      sequence: int = DEFAULT_SEQUENCE) -> Input:
         return cls(unspent.tx_id, unspent.out_index, unspent.amount, pv, address, sequence)
 
@@ -126,7 +127,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         """
         if not isinstance(self.pv, PrivateKey):
             raise exceptions.DefaultSignRequiresPrivateKey
-        if not isinstance(self.address, BitcoinAddress):
+        if not isinstance(self.address, AbstractBitcoinAddress):
             raise exceptions.DefaultSignRequiresAddress
 
         try:
@@ -181,8 +182,8 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
 
 class Output(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, address: BitcoinAddress, amount: int):
-        self.address: BitcoinAddress | None = address
+    def __init__(self, address: AbstractBitcoinAddress, amount: int):
+        self.address: AbstractBitcoinAddress | None = address
         self.script_pub_key: Script = self._from_spk if hasattr(self, '_from_spk') else address.script_pub_key
         self.amount = sint64(amount)
 
@@ -202,7 +203,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         script = script if isinstance(script, Script) else Script.from_raw(script)
 
         try:
-            address = from_script_pub_key(script)
+            address = Address.from_script_pub_key(script)
         except:
             address = None
 

@@ -22,7 +22,7 @@ def prepare_tx(tx):
     instance_outs = []
     for out in tx.outputs:
         instance_outs.append(Output(
-            address.from_string(out.address),
+            address.Address(out.address),
             out.amount
         ))
 

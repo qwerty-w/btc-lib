@@ -2,19 +2,27 @@ import pytest
 from address import *
 
 
-@pytest.fixture(params=['hash', 'pub'])  # address instance from hash/pub
+@pytest.fixture(params=['pub', 'hash', 'string', 'scriptPubKey'])  # address instance from hash/pub
 def address(request, unit, address_type):
     """
     It differs from the "address" fixture in conftest.py in that it has parameterization "from hash / pub".
     Has the same name for convenience.
     """
     address = unit[address_type]
-    address_instance = unit.pub.instance.get_address(address_type, 'mainnet')
+    network = 'mainnet'
+    ins = unit.pub.instance.get_address(address_type, network)
 
-    if request.param == 'hash':
-        address_instance = type(address_instance).from_hash(address.hash)
+    match request.param:
+        case 'hash':
+            ins = type(ins).from_hash(address.hash, network)
 
-    address.set_data({'instance': address_instance})
+        case 'string':
+            ins = Address(address.string[network])
+
+        case 'scriptPubKey':
+            ins = Address.from_script_pub_key(address.script_pub_key, network)
+
+    address.set_data({'instance': ins})
     return address
 
 
