@@ -200,7 +200,7 @@ class PublicKey:
         key_hex = (('02' if int(key_hex[-2:], 16) % 2 == 0 else '03') + key_hex[:64]) if compressed else '04' + key_hex
         return key_hex
 
-    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
+    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> AbstractBitcoinAddress:
 
         if address_type in ('P2PKH', 'P2WPKH'):
             cls = {'P2PKH': P2PKH, 'P2WPKH': P2WPKH}.get(address_type)
@@ -224,7 +224,7 @@ class PublicKey:
         return cls.from_hash(hash_, network)
 
 
-class BitcoinAddress(ABC):
+class AbstractBitcoinAddress(ABC):
     @property
     @abstractmethod
     def type(self) -> str:
@@ -247,10 +247,10 @@ class BitcoinAddress(ABC):
         return pprint_class(self, [self.__str__().__repr__()])
 
     @abstractmethod
-    def from_hash(self, hash_: str, network: str, **kwargs) -> BitcoinAddress:
+    def from_hash(self, hash_: str, network: str, **kwargs) -> AbstractBitcoinAddress:
         ...
 
-    def change_network(self, network: str = None) -> BitcoinAddress:
+    def change_network(self, network: str = None) -> AbstractBitcoinAddress:
         if network == self.network:
             return self
 
@@ -273,7 +273,7 @@ class BitcoinAddress(ABC):
         ...
 
 
-class DefaultAddress(BitcoinAddress, ABC):
+class DefaultAddress(AbstractBitcoinAddress, ABC):
     @classmethod
     def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK) -> DefaultAddress:
         return cls(cls._b58encode(bytes.fromhex(hash_), network))
@@ -313,7 +313,7 @@ class P2SH(DefaultAddress):
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
 
 
-class SegwitAddress(BitcoinAddress, ABC):
+class SegwitAddress(AbstractBitcoinAddress, ABC):
     def __init__(self, address: str):
         super().__init__(address)
         self.version: int = self._bech32decode(address, self.network)[0]
@@ -347,57 +347,63 @@ class P2WSH(SegwitAddress):
     type = 'P2WSH'
 
 
-def from_string(address: str) -> BitcoinAddress:
-    addr_type = get_address_type(address)
+class Address:
+    def __new__(cls, address: str) -> AbstractBitcoinAddress:
+        """
+        Returns P2PKH/P2SH/P2WPKH/P2WSH instance. Instance of this itself class impossible to get.
+        """
+        addr_type = get_address_type(address)
 
-    cls = {
-        'P2PKH': P2PKH,
-        'P2SH': P2SH,
-        'P2WPKH': P2WPKH,
-        'P2WSH': P2WSH
-    }.get(addr_type)
+        addr_cls = {
+            'P2PKH': P2PKH,
+            'P2SH': P2SH,
+            'P2WPKH': P2WPKH,
+            'P2WSH': P2WSH
+        }.get(addr_type)
 
-    if cls is None:
-        raise exceptions.InvalidAddress(address)
+        if addr_cls is None:
+            raise exceptions.InvalidAddress(address)
 
-    return cls(address)
+        return addr_cls(address)
 
+    @staticmethod
+    def from_script_pub_key(data: Script | str, network: str = DEFAULT_NETWORK) -> AbstractBitcoinAddress:
+        script = data if isinstance(data, Script) else Script.from_raw(data)
+        script_len = len(script)
 
-def from_script_pub_key(data: Script | str, network: str = DEFAULT_NETWORK) -> BitcoinAddress:
-    script = data if isinstance(data, Script) else Script.from_raw(data)
-    script_len = len(script)
+        p2pkh = {
+            0: 'OP_DUP',
+            1: 'OP_HASH160',
+            3: 'OP_EQUALVERIFY',
+            4: 'OP_CHECKSIG'
+        }
+        p2sh = {
+            0: 'OP_HASH160',
+            -1: 'OP_EQUAL'
+        }
+        segwit = {
+            0: 'OP_0'
+        }
 
-    p2pkh = {
-        0: 'OP_DUP',
-        1: 'OP_HASH160',
-        3: 'OP_EQUALVERIFY',
-        4: 'OP_CHECKSIG'
-    }
-    p2sh = {
-        0: 'OP_HASH160',
-        -1: 'OP_EQUAL'
-    }
-    segwit = {
-        0: 'OP_0'
-    }
+        default_script_lens = {
+            5: (p2pkh, P2PKH, 2),
+            3: (p2sh, P2SH, 1),
+        }
+        segwit_script_lens = {
+            40: P2WPKH,
+            64: P2WSH
+        }
 
-    check = lambda dict_: all([script.script[index] == value for index, value in dict_.items()])
+        check = lambda dict_: all([script.script[index] == value for index, value in dict_.items()])
 
-    if script_len == 5 and check(p2pkh):
-        return P2PKH.from_hash(script.script[2], network)
+        if default_script_lens.get(script_len) is not None:  # if p2pkh/p2sh address
+            to_check, cls, hash_index = default_script_lens[script_len]
 
-    elif script_len == 3 and check(p2sh):
-        return P2SH.from_hash(script.script[1], network)
+            if check(to_check):
+                return cls.from_hash(script.script[hash_index], network)
 
-    elif script_len == 2 and check(segwit):
+        elif script_len == 2 and check(segwit):  # if segwit address
+            hs = script.script[1]
+            return segwit_script_lens[len(hs)].from_hash(hs)
 
-        hash_ = script.script[1]
-        hash_len = len(hash_)
-
-        if hash_len == 40:
-            return P2WPKH.from_hash(hash_, network)
-
-        elif hash_len == 64:
-            return P2WSH.from_hash(hash_, network)
-
-    raise exceptions.InvalidScriptPubKey(data)
+        raise exceptions.InvalidScriptPubKey(data)
