@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Iterable
 
 import exceptions
@@ -16,7 +15,7 @@ class Script:
     def __len__(self) -> int:
         return len(self.script)
 
-    def __eq__(self, other: Script):
+    def __eq__(self, other: 'Script'):
         if isinstance(other, Script):
             return self.script == other.script
 
@@ -53,7 +52,7 @@ class Script:
 
     @classmethod
     def from_raw(cls, data: str | bytes | list[int], *, segwit: bool = False,
-                 max_items_count: int = None) -> Script:
+                 max_items_count: int = None) -> 'Script':
         script = []
         data = bytes.fromhex(data) if isinstance(data, str) else bytes(data) if isinstance(data, list) else data
 

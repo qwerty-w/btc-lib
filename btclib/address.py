@@ -1,5 +1,3 @@
-from __future__ import annotations  # need for postponed evaluation of annotations (pep 563) / remove in python3.10
-
 import base64
 from abc import ABC, abstractmethod
 from hashlib import sha256, new as hashlib_new
@@ -67,7 +65,7 @@ class PrivateKey:
     def to_bytes(self) -> bytes:
         return self.key.to_string()
 
-    def _get_public_key(self) -> PublicKey:
+    def _get_public_key(self) -> 'PublicKey':
         return PublicKey('04' + self.key.get_verifying_key().to_string().hex())
 
     def sign_message(self, message: str, *, compressed: bool = True) -> str:
@@ -200,7 +198,7 @@ class PublicKey:
         key_hex = (('02' if int(key_hex[-2:], 16) % 2 == 0 else '03') + key_hex[:64]) if compressed else '04' + key_hex
         return key_hex
 
-    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> AbstractBitcoinAddress:
+    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> 'AbstractBitcoinAddress':
 
         if address_type in ('P2PKH', 'P2WPKH'):
             cls = {'P2PKH': P2PKH, 'P2WPKH': P2WPKH}.get(address_type)
@@ -247,10 +245,10 @@ class AbstractBitcoinAddress(ABC):
         return pprint_class(self, [self.__str__().__repr__()])
 
     @abstractmethod
-    def from_hash(self, hash_: str, network: str, **kwargs) -> AbstractBitcoinAddress:
+    def from_hash(self, hash_: str, network: str, **kwargs) -> 'AbstractBitcoinAddress':
         ...
 
-    def change_network(self, network: str = None) -> AbstractBitcoinAddress:
+    def change_network(self, network: str = None) -> 'AbstractBitcoinAddress':
         if network == self.network:
             return self
 
@@ -275,7 +273,7 @@ class AbstractBitcoinAddress(ABC):
 
 class DefaultAddress(AbstractBitcoinAddress, ABC):
     @classmethod
-    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK) -> DefaultAddress:
+    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK) -> 'DefaultAddress':
         return cls(cls._b58encode(bytes.fromhex(hash_), network))
 
     @classmethod
@@ -320,7 +318,7 @@ class SegwitAddress(AbstractBitcoinAddress, ABC):
 
     @classmethod
     def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK, *,
-                  version: int = DEFAULT_WITNESS_VERSION) -> SegwitAddress:
+                  version: int = DEFAULT_WITNESS_VERSION) -> 'SegwitAddress':
         return cls(cls._bech32encode(bytes.fromhex(hash_), network, version=version))
 
     def _get_hash(self) -> str:

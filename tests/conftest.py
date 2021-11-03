@@ -1,4 +1,3 @@
-from __future__ import annotations
 from os import path
 import typing
 import json
@@ -51,7 +50,7 @@ class TestData:
         return messages
 
     @classmethod
-    def prepare_unit(cls, unit: Unit):  # prepare unit, add instances
+    def prepare_unit(cls, unit: 'Unit'):  # prepare unit, add instances
         unit = unit.copy()
         data = {'pv': (pv := PrivateKey(unit.pv.wif.compressed.mainnet)), 'pub': pv.pub}
 
@@ -61,7 +60,7 @@ class TestData:
         return unit
 
     @classmethod
-    def prepare_message(cls, message: GetterObject):  # prepare message, add unit
+    def prepare_message(cls, message: 'GetterObject'):  # prepare message, add unit
         message = message.copy()
         message.set_data({
             'unit': cls.prepare_unit(cls.units[message.unit_index]).copy()
@@ -97,14 +96,14 @@ class GetterObject:
     def _prepare_name(name: str) -> str:
         return name.replace('-', '_')
 
-    def __getitem__(self, item) -> GetterObject | str | bytes | typing.Any:
+    def __getitem__(self, item) -> 'GetterObject | str | bytes | typing.Any':
         name = self._prepare_name(item)
         return getattr(self, name)
 
     def __repr__(self):
         return pprint_class(self, sorted(self.get_attrs(), key=str.isupper))
 
-    def copy(self) -> GetterObject:
+    def copy(self) -> 'GetterObject':
         return type(self)(self.get_raw())
 
     def get_attrs(self) -> list:

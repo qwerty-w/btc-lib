@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Any, Iterable
 from abc import ABC, abstractmethod
 from base58check import b58decode
@@ -28,7 +27,7 @@ class _int(int, ABC):
             raise exceptions.IntSizeGreaterThanMaxSize(i, self.size) from None
 
     @classmethod
-    def unpack(cls, value: bytes, byteorder: str = 'little') -> _int:
+    def unpack(cls, value: bytes, byteorder: str = 'little') -> '_int':
         if len(value) > cls.size:
             raise exceptions.IntSizeGreaterThanMaxSize(value, cls.size)
 
@@ -69,7 +68,7 @@ class dint(int):
 
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: str = 'little', *,
-               increased_separator: bool = True) -> tuple[dint, bytes]:
+               increased_separator: bool = True) -> 'tuple[dint, bytes]':
         """
         Receives full data, decoding beginning int, return tuple[int, other_data[int_size:]].
         Most commonly used to get the size of the following data.

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import abstractmethod
 from typing import Iterable, Protocol
 import json
@@ -13,7 +11,7 @@ import exceptions
 
 
 def get_inputs(*args: list[PrivateKey, AbstractBitcoinAddress] |
-               tuple[PrivateKey, AbstractBitcoinAddress]) -> list[Input]:
+               tuple[PrivateKey, AbstractBitcoinAddress]) -> list['Input']:
     return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
 
 
@@ -103,10 +101,10 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
     @classmethod
     def from_unspent(cls, unspent: Unspent, pv: PrivateKey = None, address: AbstractBitcoinAddress = None,
-                     sequence: int = DEFAULT_SEQUENCE) -> Input:
+                     sequence: int = DEFAULT_SEQUENCE) -> 'Input':
         return cls(unspent.tx_id, unspent.out_index, unspent.amount, pv, address, sequence)
 
-    def copy(self) -> Input:
+    def copy(self) -> 'Input':
         instance = Input(
             self.tx_id,
             self.out_index,
@@ -120,7 +118,7 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
         return instance
 
-    def default_sign(self, tx: Transaction):  # default sign
+    def default_sign(self, tx: 'Transaction'):  # default sign
         """
         Default sign supports P2PKH, P2SH-P2WPKH, P2WPKH, P2WSH.
         The last three use a witness (tx.get_hash4sign(segwit=True))
@@ -228,7 +226,7 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
     def as_json(self, *, indent: int = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
-    def copy(self) -> Output:
+    def copy(self) -> 'Output':
         if self.address is not None:
             return Output(self.address, self.amount)
 
@@ -251,7 +249,7 @@ class IOTuple(tuple):  # inputs/outputs tuple container for Transaction
 
 
 class _Hash4SignGenerator:  # hash for sign
-    def __init__(self, tx: Transaction, input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
+    def __init__(self, tx: 'Transaction', input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
         self.tx = tx
         self.index = input_index
         self.script4hash = script4hash  # script for hash for sign
@@ -456,7 +454,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def as_json(self, *, indent: int = None, **kwargs) -> str:
         return super().as_json(self.as_dict(**kwargs), indent=indent)
 
-    def copy(self) -> Transaction:
+    def copy(self) -> 'Transaction':
         return Transaction(
             [inp.copy() for inp in self.inputs],
             [out.copy() for out in self.outputs],
@@ -512,7 +510,7 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
             inp.default_sign(self)
 
     @classmethod
-    def deserialize(cls, tx_hex: str, *, to_dict: bool = False) -> dict | Transaction:
+    def deserialize(cls, tx_hex: str, *, to_dict: bool = False) -> 'dict | Transaction':
         tx_dict = _TransactionDeserializer(tx_hex).deserialize()
 
         if to_dict:
