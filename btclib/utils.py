@@ -1,5 +1,5 @@
 from typing import Any, Iterable
-from abc import ABC, abstractmethod
+from abc import ABC
 from base58check import b58decode
 from hashlib import sha256
 from decimal import Decimal
@@ -10,15 +10,8 @@ from btclib import exceptions
 
 
 class _int(int, ABC):
-    @property
-    @abstractmethod
-    def size(self) -> int:  # byte size
-        ...
-
-    @property
-    @abstractmethod
-    def _signed(self) -> bool:
-        ...
+    size: int = NotImplemented  # byte size
+    _signed: bool = NotImplemented
 
     def __init__(self, i: int):
         try:
@@ -51,6 +44,12 @@ class sint64(_sint):
 
 class _uint(_int):
     _signed = False
+
+    def __init__(self, i: int):
+        if i < 0:
+            raise exceptions.UintGotSint(i)
+
+        super().__init__(i)
 
 
 class uint32(_uint):
