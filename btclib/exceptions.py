@@ -109,6 +109,10 @@ class IntSizeGreaterThanMaxSize(Error):
     msg = 'received int ({}) is greater than the max size ({} bytes)'
 
 
+class UintGotSint(Error):
+    msg = 'unsigned int got signed int (for {} use sint)'
+
+
 class HexLengthMustBeMultipleTwo(Error):
     msg = 'hex expected, his length multiple of two'
 
