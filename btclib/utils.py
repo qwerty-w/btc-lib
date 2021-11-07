@@ -9,6 +9,29 @@ from btclib.const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED
 from btclib import exceptions
 
 
+class TypeConverter:  # Descriptor
+    """
+    Converts "a = <value>" to "a = cls(<value>)"
+    """
+
+    def __init__(self, cls: type, *, allow_none: bool = False):
+        self.cls = cls
+        self.allow_none = allow_none
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        val = self.cls(value) if not (isinstance(value, self.cls) or (value is None and self.allow_none)) else value
+        instance.__dict__[self.name] = val
+
+
 class _int(int, ABC):
     size: int = NotImplemented  # byte size
     _signed: bool = NotImplemented
