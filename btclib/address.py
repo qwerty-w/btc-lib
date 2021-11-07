@@ -7,13 +7,13 @@ from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
 from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
-import exceptions
-from const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
-from utils import d_sha256, get_address_network, validate_address, \
+from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
+from btclib.utils import d_sha256, get_address_network, validate_address, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
-from script import Script
-from services import NetworkAPI, Unspent
-import bech32
+from btclib.script import Script
+from btclib.services import NetworkAPI, Unspent
+from btclib import exceptions
+from btclib import bech32
 
 
 class PrivateKey:

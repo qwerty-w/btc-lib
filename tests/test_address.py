@@ -1,5 +1,5 @@
 import pytest
-from address import *
+from btclib.address import *
 
 
 @pytest.fixture(params=['pub', 'hash', 'string', 'scriptPubKey'])  # address instance from hash/pub

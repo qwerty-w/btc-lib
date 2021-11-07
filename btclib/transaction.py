@@ -2,12 +2,13 @@ from abc import abstractmethod
 from typing import Iterable, Protocol
 import json
 
-from const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
-from utils import d_sha256, uint32, sint64, dint, pprint_class
-from address import AbstractBitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, Address
-from script import Script
-from services import NetworkAPI, Unspent
-import exceptions
+from btclib.const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
+    SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
+from btclib.utils import d_sha256, uint32, sint64, dint, pprint_class
+from btclib.address import AbstractBitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, Address
+from btclib.script import Script
+from btclib.services import NetworkAPI, Unspent
+from btclib import exceptions
 
 
 def get_inputs(*args: list[PrivateKey, AbstractBitcoinAddress] |

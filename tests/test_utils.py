@@ -1,7 +1,8 @@
 import random
 from collections import namedtuple
 import pytest
-from utils import *
+
+from btclib.utils import *
 
 
 randint_d = namedtuple('RandIntData', 'int cls')

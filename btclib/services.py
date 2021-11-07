@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from bit.services import *
 from requests.exceptions import ChunkedEncodingError
+
+from btclib.bit.services import *
 
 
 @dataclass  # move to BTC/services.py
