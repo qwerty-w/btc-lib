@@ -1,8 +1,11 @@
-import pytest
 import json
+from os import path
+
+import pytest
+
+from btclib import address
+from btclib.transaction import *
 from conftest import GetterObject
-import address
-from transaction import *
 
 
 def prepare_tx(tx):
@@ -31,7 +34,7 @@ def prepare_tx(tx):
 
 
 def get_txs():
-    with open('txs.json') as f:
+    with open(path.join(path.dirname(__file__), 'txs.json')) as f:
         txs = json.load(f)
 
     return [prepare_tx(GetterObject(tx)) for tx in txs]

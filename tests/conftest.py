@@ -1,14 +1,14 @@
 from os import path
-import typing
+from typing import Any
 import json
 import pytest
 
-from address import PrivateKey
-from utils import pprint_class
+from btclib.address import PrivateKey
+from btclib.utils import pprint_class
 
 
 class TestData:
-    UNITS_FP = path.join(path.split(__file__)[0], 'address_units.json')
+    UNITS_FP = path.join(path.dirname(__file__), 'address_units.json')
     _units = []
     _messages = []
 
@@ -96,7 +96,7 @@ class GetterObject:
     def _prepare_name(name: str) -> str:
         return name.replace('-', '_')
 
-    def __getitem__(self, item) -> 'GetterObject | str | bytes | typing.Any':
+    def __getitem__(self, item) -> 'GetterObject | str | bytes | Any':
         name = self._prepare_name(item)
         return getattr(self, name)
 

@@ -1,2 +1,2 @@
 import pytest
-from script import *
+from btclib.script import *

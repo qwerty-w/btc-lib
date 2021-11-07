@@ -4,9 +4,9 @@ from base58check import b58decode
 from hashlib import sha256
 from decimal import Decimal
 
-import bech32
-from const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED
-import exceptions
+from btclib import bech32
+from btclib.const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED
+from btclib import exceptions
 
 
 class _int(int, ABC):

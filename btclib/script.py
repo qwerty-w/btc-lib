@@ -1,8 +1,8 @@
 from typing import Iterable
 
-import exceptions
-from const import OP_CODES, CODE_OPS
-from utils import dint, pprint_class
+from btclib.const import OP_CODES, CODE_OPS
+from btclib.utils import dint, pprint_class
+from btclib import exceptions
 
 
 class Script:
