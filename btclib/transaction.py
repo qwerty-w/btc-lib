@@ -4,7 +4,7 @@ import json
 
 from btclib.const import DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
     SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI
-from btclib.utils import d_sha256, uint32, sint64, dint, pprint_class
+from btclib.utils import d_sha256, uint32, sint64, dint, pprint_class, TypeConverter
 from btclib.address import AbstractBitcoinAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, Address
 from btclib.script import Script
 from btclib.services import NetworkAPI, Unspent
@@ -39,8 +39,12 @@ class SupportsCopy(Protocol):
 
 
 class Input(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, tx_id: str, out_index: int, amount: int = None, pv: PrivateKey = None,
-                 address: AbstractBitcoinAddress = None, sequence: int = DEFAULT_SEQUENCE):
+    out_index = TypeConverter(uint32)
+    amount = TypeConverter(sint64, allow_none=True)
+    sequence = TypeConverter(uint32)
+
+    def __init__(self, tx_id: str, out_index: uint32 | int, amount: sint64 | int = None, pv: PrivateKey = None,
+                 address: AbstractBitcoinAddress = None, sequence: uint32 | int = DEFAULT_SEQUENCE):
         """
         :param tx_id: Transaction hex.
         :param out_index: Unspent output index in transaction.
@@ -54,9 +58,9 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
         self.address = address
 
         self.tx_id = tx_id
-        self.out_index = uint32(out_index)
-        self.amount = sint64(amount) if amount is not None else amount
-        self.sequence = uint32(sequence)
+        self.out_index = out_index
+        self.amount = amount
+        self.sequence = sequence
 
         self.script = Script()  # ScriptSig
         self.witness = Script()
@@ -181,10 +185,12 @@ class Input(SupportsDump, SupportsSerialize, SupportsCopy):
 
 
 class Output(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, address: AbstractBitcoinAddress, amount: int):
+    amount = TypeConverter(sint64)
+
+    def __init__(self, address: AbstractBitcoinAddress, amount: sint64 | int):
         self.address: AbstractBitcoinAddress | None = address
         self.script_pub_key: Script = self._from_spk if hasattr(self, '_from_spk') else address.script_pub_key
-        self.amount = sint64(amount)
+        self.amount = amount
 
     def __repr__(self):
         if self.address is None:
@@ -244,17 +250,15 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
         ])
 
 
-class IOTuple(tuple):  # inputs/outputs tuple container for Transaction
-    def __init__(self, *args, **kwargs):
-        self.amount = sum(values) if None not in (values := [ins.amount for ins in self]) else None
-
-
 class _Hash4SignGenerator:  # hash for sign
-    def __init__(self, tx: 'Transaction', input_index: int, script4hash: Script, sighash: int = SIGHASHES['all']):
+    sighash = TypeConverter(uint32)
+
+    def __init__(self, tx: 'Transaction', input_index: int, script4hash: Script,
+                 sighash: uint32 | int = SIGHASHES['all']):
         self.tx = tx
         self.index = input_index
         self.script4hash = script4hash  # script for hash for sign
-        self.sighash = uint32(sighash)
+        self.sighash = sighash
 
     def get_default(self) -> bytes:
         tx = self.tx.copy()
@@ -269,7 +273,7 @@ class _Hash4SignGenerator:  # hash for sign
 
             for n, _ in enumerate(tx.inputs):
                 if n != self.index:
-                    tx.inputs[n].sequence = uint32(EMPTY_SEQUENCE)
+                    tx.inputs[n].sequence = EMPTY_SEQUENCE
 
         elif (self.sighash & 0x1f) == SIGHASHES['single']:
 
@@ -284,7 +288,7 @@ class _Hash4SignGenerator:  # hash for sign
 
             for n, inp in enumerate(tx.inputs):
                 if n != self.index:
-                    inp.sequence = uint32(EMPTY_SEQUENCE)
+                    inp.sequence = EMPTY_SEQUENCE
 
         if self.sighash & SIGHASHES['anyonecanpay']:
             tx.inputs = (tx.inputs[self.index])
@@ -428,14 +432,24 @@ class _TransactionDeserializer:
         return data
 
 
-class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
-    def __init__(self, inputs: Iterable[Input], outputs: Iterable[Output],
-                 version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
+class IOTuple(tuple):  # inputs/outputs tuple container for Transaction
+    def __init__(self, *args, **kwargs):
+        self.amount = sum(values) if None not in (values := [ins.amount for ins in self]) else None
 
-        self.inputs = IOTuple(inputs)
-        self.outputs = IOTuple(outputs)
-        self.version = uint32(version)
-        self.locktime = uint32(locktime)
+
+class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
+    inputs = TypeConverter(IOTuple)
+    outputs = TypeConverter(IOTuple)
+    version = TypeConverter(uint32)
+    locktime = TypeConverter(uint32)
+
+    def __init__(self, inputs: IOTuple | Iterable[Input], outputs: IOTuple | Iterable[Output],
+                 version: uint32 | int = DEFAULT_VERSION, locktime: uint32 | int = DEFAULT_LOCKTIME):
+
+        self.inputs = inputs
+        self.outputs = outputs
+        self.version = version
+        self.locktime = locktime
         self.amount = self.inputs.amount
         self.fee = self.inputs.amount - self.outputs.amount if self.inputs.amount is not None else None
 
@@ -483,12 +497,12 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
                     raise exceptions.FailedToGetTransactionData(inp.tx_id)
 
                 inp_tx = Transaction.deserialize(inp_tx_hex)
-                inp.amount = sint64(inp_tx.outputs[inp.out_index].amount)
+                inp.amount = inp_tx.outputs[inp.out_index].amount
 
             amount += inp.amount
 
-        self.amount = amount
-        self.fee = amount - sum(out.amount for out in self.outputs)
+        self.amount = int(amount)
+        self.fee = int(amount - self.outputs.amount)
 
     def get_id(self) -> str:
         return d_sha256(self.serialize(to_bytes=True, exclude_witnesses=True))[::-1].hex()
