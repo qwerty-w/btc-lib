@@ -1,15 +1,20 @@
 from setuptools import setup, find_packages
 
-__version__ = '0.0.1'
-__author__ = 'qwerty-w'
+
+def get_version() -> str:
+    with open('btclib/__init__.py', 'r') as f:
+        for line in f:
+            if line.startswith('__version__'):
+                return line.strip().split('= ')[-1].strip("'")
+
 
 setup(
     name='btc-lib',
-    version=__version__,
+    version=get_version(),
     description='Simple Bitcoin Library',
     long_description=open('README.md', 'r').read(),
     long_description_content_type='text/markdown',
-    author=__author__,
+    author='qwerty-w',
     author_email='itsqwz@gmail.com',
     url='https://github.com/qwerty-w/btc-lib',
     packages=find_packages(exclude=['tests']),
