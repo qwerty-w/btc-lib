@@ -589,3 +589,8 @@ class Transaction(SupportsDump, SupportsSerialize, SupportsCopy):
             self.locktime.pack()
         ])
         return serialized_tx.hex() if not to_bytes else serialized_tx
+
+    def push(self, network: str) -> bool:
+        tx_hex = self.serialize()
+        getattr(NetworkAPI, 'broadcast_tx' + ('_testnet' if network == 'testnet' else ''))(tx_hex)
+        return True
