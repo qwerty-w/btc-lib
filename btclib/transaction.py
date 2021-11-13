@@ -13,7 +13,7 @@ from btclib import exceptions
 
 def get_inputs(*args: list[PrivateKey, AbstractBitcoinAddress] |
                tuple[PrivateKey, AbstractBitcoinAddress]) -> list['Input']:
-    return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspent()]
+    return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in address.get_unspents()]
 
 
 class SupportsDump(Protocol):
