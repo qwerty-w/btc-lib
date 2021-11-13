@@ -259,7 +259,7 @@ class AbstractBitcoinAddress(ABC):
     def get_info(self) -> dict:
         return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
-    def get_unspent(self) -> list[Unspent]:
+    def get_unspents(self) -> list[Unspent]:
         return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
 
     @abstractmethod
