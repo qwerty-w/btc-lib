@@ -188,6 +188,13 @@ class Output(SupportsDump, SupportsSerialize, SupportsCopy):
     amount = TypeConverter(sint64)
 
     def __init__(self, address: AbstractBitcoinAddress, amount: sint64 | int):
+        """
+        NOTICE: Do not forget that on the bitcoin network, coins are transferred by
+        scriptPubKey, not by the string (base58/bech32) representation of the address.
+        This means that if the inputs are on the mainnet network, and as an output you
+        use Output(Address("<testnet network address>")), then coins will be transferred
+        to <mainnet network address>, because they have the same scriptPubKey.
+        """
         self.address: AbstractBitcoinAddress | None = address
         self.script_pub_key: Script = self._from_spk if hasattr(self, '_from_spk') else address.script_pub_key
         self.amount = amount
