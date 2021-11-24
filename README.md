@@ -70,5 +70,5 @@ btc-lib is distributed on `PyPI` and is available on Linux/macOS
 and Windows and supports Python 3.10+.
 
 ```bash
-    $ python3 -m pip install btc-lib
+$ python3 -m pip install btc-lib
 ```

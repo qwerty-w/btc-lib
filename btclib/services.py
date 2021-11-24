@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from requests.exceptions import ChunkedEncodingError
 
-from btclib.bit.services import *
+from btclib.bit.services import session, BlockstreamAPI, BlockchairAPI, BlockchainAPI, SmartbitAPI,\
+    DEFAULT_TIMEOUT, Unspent, NetworkAPI, BitcoreAPI
 
 
 @dataclass  # move to BTC/services.py
@@ -24,7 +25,7 @@ class DefaultAPI(ABC):
         subclasses is the same, so it was moved to the parent class.
         """
         api = cls.TEST_ADDRESS_API if network == 'testnet' else cls.MAIN_ADDRESS_API
-        r = requests.get(api.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
+        r = session.get(api.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
 
         if r.status_code != 200:
             raise ConnectionError
@@ -177,7 +178,7 @@ class BlockcypherAPI(DefaultAPI):  # limit: 200 requests/hr
     @classmethod
     def _get_balance(cls, address: str, *, network: str = 'mainnet') -> int:
         api = cls.TEST_ADDRESS_API if network == 'testnet' else cls.MAIN_ADDRESS_API
-        r = requests.get(api.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(api.format(address), timeout=DEFAULT_TIMEOUT)
 
         if r.status_code != 200:
             raise ConnectionError
@@ -213,7 +214,7 @@ class BlockcypherAPI(DefaultAPI):  # limit: 200 requests/hr
         txs_per_page = 1000
         payload = {'limit': str(txs_per_page)}
         api = cls.TEST_UNSPENT_API if network == 'testnet' else cls.MAIN_UNSPENT_API
-        r = requests.get(api.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(api.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
 
         if r.status_code != 200:
             raise ConnectionError
@@ -247,7 +248,7 @@ class BlockcypherAPI(DefaultAPI):  # limit: 200 requests/hr
     @classmethod
     def _broadcast_tx(cls, tx_hex: str, *, network: str = 'mainnet') -> bool:
         api = cls.TEST_TX_PUSH_API if network == 'testnet' else cls.MAIN_TX_PUSH_API
-        r = requests.post(api, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(api, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
 
         return r.status_code in (200, 201)
 

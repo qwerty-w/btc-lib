@@ -27,6 +27,7 @@ import requests
 
 BTC = 10 ** 8
 DEFAULT_TIMEOUT = 10
+session = requests.Session()
 
 
 def btc2satoshi(v: float):
@@ -56,7 +57,7 @@ def set_service_timeout(seconds):
 
 class RPCHost:
     def __init__(self, user, password, host, port, use_https):
-        self._session = requests.Session()
+        self._session = session
         self._url = "http{s}://{user}:{password}@{host}:{port}/".format(
             s="s" if use_https else "", user=user, password=password, host=host, port=port,
         )
@@ -152,14 +153,14 @@ class BlockchairAPI:
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.MAIN_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['data'][address]['address']['balance']
 
     @classmethod
     def get_balance_testnet(cls, address):
-        r = requests.get(cls.TEST_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['data'][address]['address']['balance']
@@ -173,7 +174,7 @@ class BlockchairAPI:
         txs_per_page = 1000
         payload = {'offset': str(offset), 'limit': str(txs_per_page)}
 
-        r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return []
         if r.status_code != 200:  # pragma: no cover
@@ -188,7 +189,7 @@ class BlockchairAPI:
             total_txs -= txs_per_page
             offset += txs_per_page
             payload['offset'] = str(offset)
-            r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['data'][address]
@@ -204,7 +205,7 @@ class BlockchairAPI:
         txs_per_page = 1000
         payload = {'offset': str(offset), 'limit': str(txs_per_page)}
 
-        r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return []
         if r.status_code != 200:  # pragma: no cover
@@ -219,7 +220,7 @@ class BlockchairAPI:
             total_txs -= txs_per_page
             offset += txs_per_page
             payload['offset'] = str(offset)
-            r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['data'][address]
@@ -228,7 +229,7 @@ class BlockchairAPI:
 
     @classmethod
     def get_transaction_by_id(cls, txid):
-        r = requests.get(cls.MAIN_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -241,7 +242,7 @@ class BlockchairAPI:
 
     @classmethod
     def get_transaction_by_id_testnet(cls, txid):
-        r = requests.get(cls.TEST_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -261,7 +262,7 @@ class BlockchairAPI:
         unspents_per_page = 1000
         payload = {'offset': str(offset), 'limit': str(unspents_per_page)}
 
-        r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -284,7 +285,7 @@ class BlockchairAPI:
             total_unspents -= unspents_per_page
             offset += unspents_per_page
             payload['offset'] = str(offset)
-            r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['data'][address]
@@ -300,7 +301,7 @@ class BlockchairAPI:
         unspents_per_page = 1000
         payload = {'offset': str(offset), 'limit': unspents_per_page}
 
-        r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -323,7 +324,7 @@ class BlockchairAPI:
             total_unspents -= unspents_per_page
             offset += unspents_per_page
             payload['offset'] = str(offset)
-            r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['data'][address]
@@ -334,12 +335,12 @@ class BlockchairAPI:
     def broadcast_tx(
         cls, tx_hex,
     ):  # pragma: no cover
-        r = requests.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
     @classmethod
     def broadcast_tx_testnet(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.TEST_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.TEST_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
 
@@ -358,7 +359,7 @@ class BlockstreamAPI:
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.MAIN_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         response = r.json()
@@ -368,7 +369,7 @@ class BlockstreamAPI:
 
     @classmethod
     def get_balance_testnet(cls, address):
-        r = requests.get(cls.TEST_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_ADDRESS_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         response = r.json()
@@ -388,7 +389,7 @@ class BlockstreamAPI:
         transactions = []
 
         # Add mempool (unconfirmed) transactions
-        r = requests.get(mempool_endpoint.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(mempool_endpoint.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 400:  # pragma: no cover
             return []
         elif r.status_code != 200:  # pragma: no cover
@@ -401,7 +402,7 @@ class BlockstreamAPI:
         if len(unconfirmed) == 50:  # pragme: no cover
             raise ExcessiveAddress
 
-        r = requests.get(endpoint.format(address, ''), timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address, ''), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 400:  # pragma: no cover
             return []
         elif r.status_code != 200:  # pragma: no cover
@@ -415,7 +416,7 @@ class BlockstreamAPI:
         while total_txs > 0:
             transactions.extend(tx['txid'] for tx in response)
 
-            response = requests.get(endpoint.format(address, transactions[-1]), timeout=DEFAULT_TIMEOUT).json()
+            response = session.get(endpoint.format(address, transactions[-1]), timeout=DEFAULT_TIMEOUT).json()
             total_txs = len(response)
 
         transactions.extend(unconfirmed)
@@ -428,7 +429,7 @@ class BlockstreamAPI:
 
         transactions = []
 
-        r = requests.get(endpoint.format(address, ''), timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address, ''), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 400:  # pragma: no cover
             return []
         elif r.status_code != 200:  # pragma: no cover
@@ -442,14 +443,14 @@ class BlockstreamAPI:
         while total_txs > 0:
             transactions.extend(tx['txid'] for tx in response)
 
-            response = requests.get(endpoint.format(address, transactions[-1]), timeout=DEFAULT_TIMEOUT).json()
+            response = session.get(endpoint.format(address, transactions[-1]), timeout=DEFAULT_TIMEOUT).json()
             total_txs = len(response)
 
         return transactions
 
     @classmethod
     def get_transaction_by_id(cls, txid):
-        r = requests.get(cls.MAIN_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -458,7 +459,7 @@ class BlockstreamAPI:
 
     @classmethod
     def get_transaction_by_id_testnet(cls, txid):
-        r = requests.get(cls.TEST_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_TX_API.format(txid), timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -468,12 +469,12 @@ class BlockstreamAPI:
     @classmethod
     def get_unspent(cls, address):
         # Get current block height:
-        r_block = requests.get(cls.MAIN_ENDPOINT + 'blocks/tip/height', timeout=DEFAULT_TIMEOUT)
+        r_block = session.get(cls.MAIN_ENDPOINT + 'blocks/tip/height', timeout=DEFAULT_TIMEOUT)
         if r_block.status_code != 200:  # pragma: no cover
             raise ConnectionError
         block_height = int(r_block.text)
 
-        r = requests.get(cls.MAIN_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
 
         #! BlockstreamAPI blocks addresses with "too many" UTXOs.
         if r.status_code == 400 and r.text == "Too many history entries":
@@ -500,12 +501,12 @@ class BlockstreamAPI:
     @classmethod
     def get_unspent_testnet(cls, address):
         # Get current block height:
-        r_block = requests.get(cls.TEST_ENDPOINT + 'blocks/tip/height', timeout=DEFAULT_TIMEOUT)
+        r_block = session.get(cls.TEST_ENDPOINT + 'blocks/tip/height', timeout=DEFAULT_TIMEOUT)
         if r_block.status_code != 200:  # pragma: no cover
             raise ConnectionError
         block_height = int(r_block.text)
 
-        r = requests.get(cls.TEST_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
 
         if r.status_code == 400:  # pragma: no cover
             return []
@@ -529,12 +530,12 @@ class BlockstreamAPI:
 
     @classmethod
     def broadcast_tx(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
     @classmethod
     def broadcast_tx_testnet(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.TEST_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.TEST_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
 
@@ -549,21 +550,21 @@ class InsightAPI:  # pragma: no cover
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.MAIN_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()
 
     @classmethod
     def get_transactions(cls, address):
-        r = requests.get(cls.MAIN_ADDRESS_API + address, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_ADDRESS_API + address, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['transactions']
 
     @classmethod
     def get_transaction_by_id(cls, txid):
-        r = requests.get(cls.MAIN_TX_API + txid, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_TX_API + txid, timeout=DEFAULT_TIMEOUT)
         if r.status_code == 404:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -572,7 +573,7 @@ class InsightAPI:  # pragma: no cover
 
     @classmethod
     def get_unspent(cls, address):
-        r = requests.get(cls.MAIN_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_UNSPENT_API.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return [
@@ -587,7 +588,7 @@ class InsightAPI:  # pragma: no cover
 
     @classmethod
     def broadcast_tx(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.MAIN_TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
 
@@ -616,7 +617,7 @@ class BitcoreAPI(InsightAPI):
 
         unspents = []
 
-        r = requests.get(endpoint.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -633,7 +634,7 @@ class BitcoreAPI(InsightAPI):
                 )
                 for tx in response
             )
-            response = requests.get(
+            response = session.get(
                 endpoint.format(address) + "&since={}".format(response[-1]['_id']), timeout=DEFAULT_TIMEOUT
             ).json()
 
@@ -641,13 +642,13 @@ class BitcoreAPI(InsightAPI):
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.MAIN_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
         r.raise_for_status()  # pragma: no cover
         return r.json()['balance']
 
     @classmethod
     def get_balance_testnet(cls, address):
-        r = requests.get(cls.TEST_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_BALANCE_API.format(address), timeout=DEFAULT_TIMEOUT)
         r.raise_for_status()  # pragma: no cover
         return r.json()['balance']
 
@@ -657,7 +658,7 @@ class BitcoreAPI(InsightAPI):
 
         unspents = []
 
-        r = requests.get(endpoint.format(address), timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -673,7 +674,7 @@ class BitcoreAPI(InsightAPI):
                 )
                 for tx in response
             )
-            response = requests.get(
+            response = session.get(
                 endpoint.format(address) + "&since={}".format(response[-1]['_id']), timeout=DEFAULT_TIMEOUT
             ).json()
 
@@ -681,7 +682,7 @@ class BitcoreAPI(InsightAPI):
 
     @classmethod
     def broadcast_tx_testnet(cls, tx_hex):  # pragma: no cover
-        r = requests.post(
+        r = session.post(
             cls.TEST_TX_PUSH_API,
             json={cls.TX_PUSH_PARAM: tx_hex, 'network': 'testnet', 'coin': 'BCH'},
             timeout=DEFAULT_TIMEOUT,
@@ -699,7 +700,7 @@ class BlockchainAPI:
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.ADDRESS_API.format(address) + '&limit=0', timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.ADDRESS_API.format(address) + '&limit=0', timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['final_balance']
@@ -713,7 +714,7 @@ class BlockchainAPI:
         txs_per_page = 50
         payload = {'offset': str(offset)}
 
-        r = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         response = r.json()
@@ -725,13 +726,13 @@ class BlockchainAPI:
             total_txs -= txs_per_page
             offset += txs_per_page
             payload['offset'] = str(offset)
-            response = requests.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT).json()
+            response = session.get(endpoint.format(address), params=payload, timeout=DEFAULT_TIMEOUT).json()
 
         return transactions
 
     @classmethod
     def get_transaction_by_id(cls, txid):
-        r = requests.get(cls.TX_API + txid + '?limit=0&format=hex', timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TX_API + txid + '?limit=0&format=hex', timeout=DEFAULT_TIMEOUT)
         if r.status_code == 500 and r.text == 'Transaction not found':  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -746,7 +747,7 @@ class BlockchainAPI:
         utxos_per_page = 1000
         payload = {'active': address, 'offset': str(offset), 'limit': str(utxos_per_page)}
 
-        r = requests.get(endpoint, params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(endpoint, params=payload, timeout=DEFAULT_TIMEOUT)
 
         if r.status_code == 500:  # pragma: no cover
             return []
@@ -767,7 +768,7 @@ class BlockchainAPI:
 
     @classmethod
     def broadcast_tx(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.TX_PUSH_API, data={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
 
@@ -786,14 +787,14 @@ class SmartbitAPI:  # is now offline
 
     @classmethod
     def get_balance(cls, address):
-        r = requests.get(cls.MAIN_ADDRESS_API.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_ADDRESS_API.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['address']['total']['balance_int']
 
     @classmethod
     def get_balance_testnet(cls, address):
-        r = requests.get(cls.TEST_ADDRESS_API.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_ADDRESS_API.format(address), params={'limit': '1'}, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
         return r.json()['address']['total']['balance_int']
@@ -802,7 +803,7 @@ class SmartbitAPI:  # is now offline
     def get_transactions(cls, address):
         txs_per_page = 1000
         payload = {'limit': str(txs_per_page)}
-        r = requests.get(cls.MAIN_ADDRESS_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_ADDRESS_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -816,7 +817,7 @@ class SmartbitAPI:  # is now offline
             next_link = response['transaction_paging']['next_link']
 
         while next_link:
-            r = requests.get(next_link, timeout=DEFAULT_TIMEOUT)
+            r = session.get(next_link, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['address']
@@ -827,7 +828,7 @@ class SmartbitAPI:  # is now offline
 
     @classmethod
     def get_transaction_by_id(cls, txid):
-        r = requests.get(cls.MAIN_TX_API.format(txid) + '?limit=1000', timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_TX_API.format(txid) + '?limit=1000', timeout=DEFAULT_TIMEOUT)
         if r.status_code == 400:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -838,7 +839,7 @@ class SmartbitAPI:  # is now offline
     def get_transactions_testnet(cls, address):
         txs_per_page = 1000
         payload = {'limit': str(txs_per_page)}
-        r = requests.get(cls.TEST_ADDRESS_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_ADDRESS_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -852,7 +853,7 @@ class SmartbitAPI:  # is now offline
             next_link = response['transaction_paging']['next_link']
 
         while next_link:
-            r = requests.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()['address']
@@ -863,7 +864,7 @@ class SmartbitAPI:  # is now offline
 
     @classmethod
     def get_transaction_by_id_testnet(cls, txid):
-        r = requests.get(cls.TEST_TX_API.format(txid) + '?limit=1000', timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_TX_API.format(txid) + '?limit=1000', timeout=DEFAULT_TIMEOUT)
         if r.status_code == 400:  # pragma: no cover
             return None
         if r.status_code != 200:  # pragma: no cover
@@ -874,7 +875,7 @@ class SmartbitAPI:  # is now offline
     def get_unspent(cls, address):
         txs_per_page = 1000
         payload = {'limit': str(txs_per_page)}
-        r = requests.get(cls.MAIN_UNSPENT_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.MAIN_UNSPENT_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -896,7 +897,7 @@ class SmartbitAPI:  # is now offline
             next_link = response['paging']['next_link']
 
         while next_link:
-            r = requests.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()
@@ -917,7 +918,7 @@ class SmartbitAPI:  # is now offline
     def get_unspent_testnet(cls, address):
         txs_per_page = 1000
         payload = {'limit': str(txs_per_page)}
-        r = requests.get(cls.TEST_UNSPENT_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
+        r = session.get(cls.TEST_UNSPENT_API.format(address), params=payload, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:  # pragma: no cover
             raise ConnectionError
 
@@ -939,7 +940,7 @@ class SmartbitAPI:  # is now offline
             next_link = response['paging']['next_link']
 
         while next_link:
-            r = requests.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
+            r = session.get(next_link, params=payload, timeout=DEFAULT_TIMEOUT)
             if r.status_code != 200:  # pragma: no cover
                 raise ConnectionError
             response = r.json()
@@ -958,12 +959,12 @@ class SmartbitAPI:  # is now offline
 
     @classmethod
     def broadcast_tx(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.MAIN_TX_PUSH_API, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.MAIN_TX_PUSH_API, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
     @classmethod
     def broadcast_tx_testnet(cls, tx_hex):  # pragma: no cover
-        r = requests.post(cls.TEST_TX_PUSH_API, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
+        r = session.post(cls.TEST_TX_PUSH_API, json={cls.TX_PUSH_PARAM: tx_hex}, timeout=DEFAULT_TIMEOUT)
         return True if r.status_code == 200 else False
 
 
