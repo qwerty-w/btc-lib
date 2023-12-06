@@ -5,6 +5,7 @@ import pytest
 
 from btclib.address import PrivateKey
 from btclib.utils import pprint_class
+from btclib.const import AddressType, NetworkType
 
 
 class TestData:
@@ -31,7 +32,7 @@ class TestData:
 
         for unit in units:
             unit['pv']['bytes'] = bytes.fromhex(unit['pv']['hex'])
-            unit['pub']['bytes'] = bytes.fromhex(unit['pub']['hex']['uncompressed'][2:])
+            unit['pub']['bytes'] = bytes.fromhex(unit['pub']['hex']['compressed'])
 
         return [Unit(unit_data) for unit_data in units]
 
@@ -52,7 +53,7 @@ class TestData:
     @classmethod
     def prepare_unit(cls, unit: 'Unit'):  # prepare unit, add instances
         unit = unit.copy()
-        data = {'pv': (pv := PrivateKey(unit.pv.wif.compressed.mainnet)), 'pub': pv.pub}
+        data = {'pv': (pv := PrivateKey.from_wif(unit.pv.wif.compressed['mainnet'])), 'pub': pv.public}
 
         for name, instance in data.items():
             unit[name].set_data({'instance': instance})
@@ -138,8 +139,8 @@ class IsCompressed:
         self.bool = value
 
 
-@pytest.fixture(params=['mainnet', 'testnet'])
-def network(request) -> str:
+@pytest.fixture(params=[NetworkType.MAIN, NetworkType.TEST])
+def network(request) -> NetworkType:
     return request.param
 
 
@@ -166,8 +167,8 @@ def at_id(address_type):
     return f'<{address_type}>'
 
 
-@pytest.fixture(params=['P2PKH', 'P2SH-P2WPKH', 'P2WPKH', 'P2WSH'], ids=at_id)
-def address_type(request) -> str:
+@pytest.fixture(params=[AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH], ids=at_id)
+def address_type(request) -> AddressType:
     """
     :param request: The type of address "P2SH-P2WPKH" is written through a dash because PublicKey.get_address
                     is perceived only in this way.
@@ -181,7 +182,7 @@ def address(unit, address_type):
     """
     Return prepared unit[address_type], add address instance.
     """
-    address = unit[address_type]
-    address_instance = unit.pub.instance.get_address(address_type, 'mainnet')
+    address = unit[address_type.value.replace('_', '-')]
+    address_instance = unit.pub.instance.get_address(address_type, NetworkType.MAIN)
     address.set_data({'instance': address_instance})
     return address
