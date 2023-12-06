@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional
 
 from btclib.const import OP_CODES, CODE_OPS
 from btclib.utils import dint, pprint_class
@@ -22,15 +22,14 @@ class Script:
         return NotImplemented
 
     @staticmethod
-    def _validate_data(raw_data: Iterable) -> list[str]:
-        _data = []
+    def _validate_data(raw: Iterable) -> list[str]:
+        script = []
 
-        for index, item in enumerate(raw_data):
+        for item in raw:
             if not len(item):
                 continue
 
             if isinstance(item, str):
-
                 if not item.startswith('OP_'):
                     if len(item) % 2 != 0:
                         raise exceptions.HexLengthMustBeMultipleTwo
@@ -46,13 +45,13 @@ class Script:
             else:
                 raise exceptions.InvalidInputScriptData(type(item)) from None
 
-            _data.append(item)
+            script.append(item)
 
-        return _data
+        return script
 
     @classmethod
     def from_raw(cls, data: str | bytes | list[int], *, segwit: bool = False,
-                 max_items_count: int = None) -> 'Script':
+                 max_items_count: Optional[int] = None) -> 'Script':
         script = []
         data = bytes.fromhex(data) if isinstance(data, str) else bytes(data) if isinstance(data, list) else data
 

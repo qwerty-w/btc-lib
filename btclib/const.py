@@ -1,3 +1,19 @@
+from enum import Enum
+
+
+class AddressType(Enum):
+    P2PKH = 'P2PKH'
+    P2SH_P2WPKH = 'P2SH_P2WPKH'
+    P2WPKH = 'P2WPKH'
+    P2WSH = 'P2WSH'
+
+
+class NetworkType(Enum):
+    MAIN = 'mainnet'
+    TEST = 'testnet'
+
+    def toggle(self) -> 'NetworkType':
+        return sorted([self.MAIN, self.TEST], key=lambda x: x == self)[0]
 
 
 MAX_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
@@ -7,10 +23,8 @@ DEFAULT_VERSION = 2
 DEFAULT_LOCKTIME = 0
 DEFAULT_WITNESS_VERSION = 0
 DEFAULT_SEQUENCE = 4294967295
-DEFAULT_NETWORK = 'mainnet'
-
+DEFAULT_NETWORK = NetworkType.MAIN
 EMPTY_SEQUENCE = 0
-
 NEGATIVE_SATOSHI = -1
 
 SEPARATORS = {
@@ -40,20 +54,27 @@ SEPARATORS_REVERSED = {
 
 PREFIXES = {
     'wif': {
-        'mainnet': b'\x80',
-        'testnet': b'\xef'
+        NetworkType.MAIN: b'\x80',
+        NetworkType.TEST: b'\xef'
     },
-    'P2PKH': {
-        'mainnet': b'\x00',
-        'testnet': b'\x6f'
+    AddressType.P2PKH: {
+        NetworkType.MAIN: b'\x00',
+        NetworkType.TEST: b'\x6f'
     },
-    'P2SH': {
-        'mainnet': b'\x05',
-        'testnet': b'\xc4'
+    AddressType.P2SH_P2WPKH: {
+        NetworkType.MAIN: b'\x05',
+        NetworkType.TEST: b'\xc4'
     },
     'bech32': {
-        'mainnet': 'bc',
-        'testnet': 'tb'
+        NetworkType.MAIN: 'bc',
+        NetworkType.TEST: 'tb'
+    },
+    'public_key': {
+        'compressed': {
+            'even': b'\x02',
+            'odd': b'\x03'
+        },
+        'uncompressed': b'\x04'
     }
 }
 
