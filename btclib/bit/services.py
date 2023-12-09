@@ -36,8 +36,8 @@ def btc2satoshi(v: float):
 
 @dataclass
 class Unspent:
-    tx_id: str
-    out_index: int
+    txid: str
+    vout: int
     amount: int
     address: str
 
