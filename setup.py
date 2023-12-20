@@ -7,6 +7,8 @@ def get_version() -> str:
             if line.startswith('__version__'):
                 return line.strip().split('= ')[-1].strip("'")
 
+    raise RuntimeError('__version__ not found')
+
 
 setup(
     name='btc-lib',
