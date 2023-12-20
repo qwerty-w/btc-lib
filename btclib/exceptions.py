@@ -36,7 +36,7 @@ class InvalidWIF(InvalidError):
     msg = 'invalid WIF (checksum not verified) - {}'
 
 
-class InvalidCompressionFormat(InvalidError):
+class InvalidCompressionFormat(InvalidError):  # todo: remove
     msg = 'invalid compression format - {}'
 
 
@@ -56,11 +56,11 @@ class InvalidByteorder(InvalidError):
     msg = '"little"/"big" expected, {} received'
 
 
-class InvalidSignatureLength(InvalidError):
+class InvalidSignatureLength(InvalidError):  # todo: remove
     msg = 'decoded signature length should be 65, but {} received'
 
 
-class InvalidRecoveryID(InvalidError):
+class InvalidRecoveryID(InvalidError):  # todo: remove
     msg = 'recovery id should be 27 <= rec_id <= 34, but {} received'
 
 

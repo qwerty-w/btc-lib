@@ -53,7 +53,7 @@ AddressINF(received=100000, sent=0, tx_count=1, balance=100000)
 >>> # To summarize: if the address was obtained with PublicKey.get_address(<some_type>, <some_network>), Input.default_sign will be able to sign it.
 >>> # else, use inp.custom_sign with custom scripts.
 >>>
->>> tx.serialize()
+>>> tx.serialize().hex()
 '02000000000101007fbc7360700ee5632d8656c89409ec20ad7cfbda6c3107a4270c3ae63181740000000000ffffffff01905f010000000000160014f4dfea325e58ab2da8e2b13cd...'
 >>> tx.get_id()
 'fff79b6d9f6a4068d5b8298c522177e9783af70d61653d628314e155a1e0e94e'

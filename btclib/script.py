@@ -55,7 +55,7 @@ class Script(list[str]):
 
     @classmethod
     def deserialize(cls, raw: InputItem, *, segwit: bool = False,
-                 max_items: Optional[int] = None) -> 'Script':
+                    max_items: Optional[int] = None) -> 'Script':
         script = []
         data = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw) if isinstance(raw, list) else raw
 

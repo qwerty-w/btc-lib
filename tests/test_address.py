@@ -45,7 +45,7 @@ class TestPrivatePublicKey:
         assert unit.pub.instance.to_bytes() == unit.pub.bytes == PublicKey.from_hex(unit.pub.hex[compressed.string]).to_bytes()
 
     def test_pub_key_to_hex(self, unit, compressed):
-        assert unit.pub.instance.to_hex(compressed=compressed.bool) == unit.pub.hex[compressed.string]
+        assert unit.pub.instance.to_bytes(compressed=compressed.bool).hex() == unit.pub.hex[compressed.string]
 
     def test_pub_key_hash160(self, unit, compressed):
         assert unit.pub.instance.get_hash160(compressed=compressed.bool).hex() == unit.pub.hash160[compressed.string]
@@ -66,7 +66,7 @@ class TestPrivatePublicKey:
 
 class TestAddress:
     def test_script_pub_key(self, address):
-        assert address.instance.script_pub_key.to_hex() == address.script_pub_key
+        assert address.instance.script_pub_key.serialize().hex() == address.script_pub_key
 
     def test_string(self, address, network):
         ins = address.instance.change_network(network)
