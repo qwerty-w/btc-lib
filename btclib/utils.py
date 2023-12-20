@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Callable, Iterable, Literal, Optional, Self, TypeVar, overload
 from abc import ABC
 from base58check import b58decode
 from decimal import Decimal
@@ -12,27 +12,52 @@ from btclib import exceptions
 byteorder_T = Literal['little', 'big']
 
 
-class TypeConverter:  # Descriptor
+class TypeConverter[expected_T, converted_T]:  # Descriptor
     """
-    Converts "a = <value>" to "a = cls(<value>)"
+    A descriptor that converts the type that is assigned to an attribute to the set type
+    Example: "var = <value>" to "var = __class(<value>)" or "var = __converter(<value>)"
+
+    Example:
+        x: TypeConverter[Iterable[int], int] = TypeConverter(int, sum)
     """
+    @overload
+    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], Optional[converted_T]]] = None, *, optional: Literal[True]): ...
 
-    def __init__(self, cls: type, *, allow_none: bool = False):
-        self.cls = cls
-        self.allow_none = allow_none
+    @overload
+    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], converted_T]] = None, *, optional: Literal[False] = False): ...
 
-    def __set_name__(self, owner, name):
+    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], Optional[converted_T] | converted_T]] = None, *, optional: bool = False):
+        """
+        :param __class: The type of the object should be
+        :param __converter: A function (or something Callable) called to convert received object to type in __class
+        :param optional: Can the attribute be optional (equal to None)
+        """
+        self.cls = __class
+        self.converter = __converter
+        self.optional = optional
+
+    def __set_name__(self, owner: Any, name: Any) -> None:
         self.name = name
 
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
+    @overload
+    def __get__(self, instance: None, owner: None) -> 'TypeConverter': ...
 
-        return instance.__dict__[self.name]
+    @overload
+    def __get__(self, instance: Any, owner: Any) -> converted_T: ...
 
-    def __set__(self, instance, value):
-        val = self.cls(value) if not (isinstance(value, self.cls) or (value is None and self.allow_none)) else value
-        instance.__dict__[self.name] = val
+    def __get__(self, instance: Optional[Any], owner: Optional[Any]) -> 'TypeConverter' | converted_T:
+        return self if instance is None else instance.__dict__[self.name]
+
+    def __set__(self, instance: Any, value: expected_T) -> None:
+        if isinstance(value, self.cls) or value is None and self.optional:
+            v: Optional[converted_T] = value
+        elif self.converter:
+            v: Optional[converted_T] = self.converter(value)
+            assert v is not None or self.optional, 'converter can\'t return None if optional=False'
+        else:
+            v = self.cls(value)
+
+        instance.__dict__[self.name] = v
 
 
 class _int(int, ABC):
@@ -46,7 +71,7 @@ class _int(int, ABC):
             raise exceptions.IntSizeGreaterThanMaxSize(i, self.size) from None
 
     @classmethod
-    def unpack(cls, value: bytes, byteorder: byteorder_T = 'little') -> '_int':
+    def unpack(cls, value: bytes, byteorder: byteorder_T = 'little') -> Self:
         if len(value) > cls.size:
             raise exceptions.IntSizeGreaterThanMaxSize(value, cls.size)
 
@@ -74,7 +99,6 @@ class _uint(_int):
     def __init__(self, i: int):
         if i < 0:
             raise exceptions.UintGotSint(i)
-
         super().__init__(i)
 
 
@@ -93,7 +117,7 @@ class dint(int):
 
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: byteorder_T = 'little', *,
-               increased_separator: bool = True) -> 'tuple[dint, bytes]':
+               increased_separator: bool = True) -> tuple['dint', bytes]:
         """
         Receives full data, decoding beginning int, return tuple[int, other_data[int_size:]].
         Most commonly used to get the size of the following data.
