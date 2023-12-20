@@ -1,6 +1,7 @@
-import random
-from collections import namedtuple
 import pytest
+import random
+import hashlib
+from collections import namedtuple
 
 from btclib.utils import *
 
@@ -185,7 +186,7 @@ class TestDynamicInt:
 @pytest.mark.repeat(10)
 def test_d_sha256():
     random_data = random.randbytes(64)
-    assert sha256(sha256(random_data).digest()).digest() == d_sha256(random_data)
+    assert hashlib.sha256(hashlib.sha256(random_data).digest()).digest() == d_sha256(random_data)
 
 
 def i2b_id(data):
@@ -210,7 +211,7 @@ def test_bytes2int_signed(i2b_items):
 
 
 def test_get_address_network_correct_data(address, network):
-    assert network == get_address_network(address.string[network])
+    assert network == get_address_network(address.string[network.value])
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
@@ -219,17 +220,17 @@ def test_get_address_network_incorrect_data(incorrect_address):
 
 
 def test_get_address_type(address, network):
-    assert get_address_type(address.string[network]) == address.instance.type
+    assert get_address_type(address.string[network.value]) == address.instance.type
 
 
 def test_validate_address_correct_data(address, network):
-    assert validate_address(address.string[network], address.instance.type, network)
+    assert validate_address(address.string[network.value], address.instance.type, network)
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
 def test_validate_address_incorrect_data(incorrect_address):
     assert False is validate_address(
         incorrect_address,
-        random.choice(['P2PKH', 'P2SH', 'P2WSH', 'P2WPKH']),
-        random.choice(['mainnet', 'testnet'])
+        random.choice([AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH]),
+        random.choice([NetworkType.MAIN, NetworkType.TEST])
     )
