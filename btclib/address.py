@@ -236,6 +236,9 @@ class Address(ABC):
     def __repr__(self):
         return pprint_class(self, [self.__str__().__repr__()])
 
+    def __eq__(self, other: 'Address'):
+        return str(self) == str(other) if isinstance(other, Address) else NotImplemented
+
     @classmethod
     @abstractmethod
     def from_hash(cls, hash: bytes, network: NetworkType, **kwargs) -> 'Address':
