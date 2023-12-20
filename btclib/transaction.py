@@ -4,13 +4,13 @@ from typing import Any, Iterable, Literal, Mapping, Optional, Protocol, Self, Ty
     NotRequired, cast, overload, runtime_checkable
 import json
 
-from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
-    SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
+from btclib import exceptions
+from btclib.services import NetworkAPI, Unspent
+from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, dint, pprint_class, TypeConverter
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
-from btclib.script import Script
-from btclib.services import NetworkAPI, Unspent
-from btclib import exceptions
+from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
+    SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
 
 @runtime_checkable
