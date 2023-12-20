@@ -5,6 +5,7 @@ import pytest
 
 from btclib import address
 from btclib.transaction import *
+from btclib.const import AddressType, NetworkType
 from conftest import GetterObject
 
 
@@ -12,11 +13,11 @@ def prepare_tx(tx):
     instance_inps = []
     for inp in tx.inputs:
         inp_instance = Input(
-            inp.tx_id,
-            inp.out_index,
+            inp.txid,
+            inp.vout,
             inp.amount,
-            pv := PrivateKey(inp.wif),
-            pv.pub.get_address(inp.type, 'testnet')
+            pv := PrivateKey.from_wif(inp.wif),
+            pv.public.get_address(AddressType[inp.type.replace('-', '_')], NetworkType.TEST)
         )
         inp_instance.custom_sign(inp.script, inp.witness)
 
@@ -24,8 +25,8 @@ def prepare_tx(tx):
 
     instance_outs = []
     for out in tx.outputs:
-        instance_outs.append(Output(
-            address.Address(out.address),
+        instance_outs.append(Output.from_address(
+            address.from_string(out.address),
             out.amount
         ))
 
@@ -106,7 +107,7 @@ def _test_copy(instance, eq_=(), is_=(), eq_not=(), is_not=()):
 
 class TestInput:
     def test_copy(self, inp):
-        return _test_copy(inp.instance, ['tx_id', 'out_index', 'amount'], ['pv', 'address'])
+        return _test_copy(inp.instance, ['txid', 'vout', 'amount'], ['private', 'address'])
 
     def test_serialize(self, inp):
         assert inp.serialized == inp.instance.serialize().hex()
@@ -114,11 +115,11 @@ class TestInput:
 
 class TestOutput:
     def test_from_script_pub_key(self, out):
-        fr = Output.from_script_pub_key(out.script_pub_key, out.amount)
+        fr = Output(out.script_pub_key, out.amount)
         assert fr.serialize().hex() == out.serialized == out.instance.serialize().hex()
 
     def test_copy(self, out):
-        return _test_copy(out.instance, ['script_pub_key', 'amount'], ['address'])
+        return _test_copy(out.instance, ['script_pub_key', 'amount', '_address'])
 
     def test_serialize(self, out):
         assert out.serialized == out.instance.serialize().hex()
@@ -136,12 +137,12 @@ class TestTransaction:
 
     def test_default_sign(self, tx):
         for instance_inp, tx_inp in zip(tx.instance.inputs, tx.inputs):
-            instance_inp.custom_sign(None, None)
+            instance_inp.clear()
             instance_inp.default_sign(tx.instance)
 
             for attr in 'script', 'witness':
                 tx_inp_val = getattr(tx_inp, attr)
-                assert getattr(instance_inp, attr).to_hex() == '' if tx_inp_val is None else tx_inp_val
+                assert getattr(instance_inp, attr).to_hex() == ('' if tx_inp_val is None else tx_inp_val)
 
     def test_serialize(self, tx):
         assert tx.serialized == tx.instance.serialize()
@@ -153,7 +154,7 @@ class TestTransaction:
             assert len(getattr(des, attr)) == len(getattr(tx, attr))
 
         for des_inp, tx_inp in zip(des.inputs, tx.inputs):
-            for attr in 'tx_id', 'out_index':
+            for attr in 'txid', 'vout':
                 assert ga_eq(des_inp, tx_inp, attr)
 
             for attr in 'script', 'witness':
