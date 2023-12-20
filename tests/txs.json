@@ -4,8 +4,8 @@
             {
                 "wif": "KyDvBNn41mY97mgXJmaYB2GtqTmx11wzbMZyZqizLGBRqEWMkFPP",
                 "type": "P2PKH",
-                "tx_id": "c7d7378f15482e59e651c11ee95ef8eb86e8b61f2de93f2d499db11befd043b2",
-                "out_index": 0,
+                "txid": "c7d7378f15482e59e651c11ee95ef8eb86e8b61f2de93f2d499db11befd043b2",
+                "vout": 0,
                 "amount": 1323157,
                 "script": "4730440220057c67c9c8ae9e288df1e4253e197ac285f57a7e020ce89fadb100069d089b5d0220466b1589180dd1d00b24012f296fe761b4bd9d242dc9461872bdec41e009f2d4012103171d61c699014278803aa18526122b16288a41c6996f8f4550a5b30b071905f8",
                 "witness": null,
@@ -44,8 +44,8 @@
             {
                 "wif": "L5F9GbmZseYSRh7bWycCH766GE5y5ozzhv4ysQsU4kZiFgu2gGzK",
                 "type": "P2SH-P2WPKH",
-                "tx_id": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
-                "out_index": 0,
+                "txid": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
+                "vout": 0,
                 "amount": 437719,
                 "script": "160014927555abae5dbfb4bb567ed8d3041d2a7d4ae23d",
                 "witness": "47304402200bcc1f574007aa05f6f135be8178246dd07dc8574f11af8df68dab28d0cd9d710220423455914b1b2a3ff3f127c848d5f6d31ffd86503182d694733078d1eda94aa30121036a36108d8f8621749e26fc7b508d923be94cf22d73926ffd1a755d502b987839",
@@ -86,8 +86,8 @@
             {
                 "wif": "KyzuhbqsMrrJ8dK6ktspu7XwgVNhwnzv3raqw4oSciYpBHwMy6ZA",
                 "type": "P2WPKH",
-                "tx_id": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
-                "out_index": 1,
+                "txid": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
+                "vout": 1,
                 "amount": 437719,
                 "script": null,
                 "witness": "483045022100d82080dabfdaca5cc159a92f3802a6753f82eaea7916f72c6a5a96c50437decf0220482a44125befe203af085ad34b43e44d082101692c4b0f9d4c2ae83171aac3f0012103c6baa07c44a568b416c1d35e0ec33a01b33106c7f3cce522200c270900486cea",
@@ -129,8 +129,8 @@
             {
                 "wif": "L1Nm5XQzMMpTH5hrkKdJgr8jDx696Ge3cv13yqGhnauUdfGangzL",
                 "type": "P2WSH",
-                "tx_id": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
-                "out_index": 2,
+                "txid": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
+                "vout": 2,
                 "amount": 437719,
                 "script": null,
                 "witness": "0047304402201bc754a4979c98e8dfc912b15f205d4389a7e7a10d306174d5fbfd303d0ca21802205431373175281f379e4ca1db4c5fef35931ad148f088caf76e2248881f5952b701255121030d27a04b8aaa1bc5839bb83ebdadca652ea97950fe28741f27996c65f716e33e51ae",
