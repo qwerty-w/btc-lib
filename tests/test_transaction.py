@@ -142,13 +142,13 @@ class TestTransaction:
 
             for attr in 'script', 'witness':
                 tx_inp_val = getattr(tx_inp, attr)
-                assert getattr(instance_inp, attr).to_hex() == ('' if tx_inp_val is None else tx_inp_val)
+                assert getattr(instance_inp, attr).serialize().hex() == ('' if tx_inp_val is None else tx_inp_val)
 
     def test_serialize(self, tx):
-        assert tx.serialized == tx.instance.serialize()
+        assert tx.serialized == tx.instance.serialize().hex()
 
     def test_deserialize(self, tx):
-        des = Transaction.deserialize(tx.serialized)
+        des = Transaction.deserialize(bytes.fromhex(tx.serialized))
 
         for attr in 'inputs', 'outputs':
             assert len(getattr(des, attr)) == len(getattr(tx, attr))
@@ -159,13 +159,13 @@ class TestTransaction:
 
             for attr in 'script', 'witness':
                 tx_inp_attr = getattr(tx_inp, attr)
-                assert getattr(des_inp, attr).to_hex() == '' if tx_inp_attr is None else tx_inp_attr
+                assert getattr(des_inp, attr).serialize().hex() == '' if tx_inp_attr is None else tx_inp_attr
 
         for des_out, tx_out in zip(des.outputs, tx.outputs):
-            assert des_out.script_pub_key.to_hex() == tx_out.script_pub_key
+            assert des_out.script_pub_key.serialize().hex() == tx_out.script_pub_key
             assert ga_eq(des_out, tx_out, 'amount')
 
         for attr in 'version', 'locktime':
             assert ga_eq(des, tx, attr)
 
-        assert des.serialize() == tx.serialized
+        assert des.serialize().hex() == tx.serialized

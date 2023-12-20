@@ -156,11 +156,11 @@ class PublicKey:
 
             case AddressType.P2SH_P2WPKH:
                 _cls = P2SH
-                h = r160(sha256(Script('OP_0', self.get_hash160()).to_bytes()))
+                h = r160(sha256(Script('OP_0', self.get_hash160()).serialize()))
 
             case AddressType.P2WSH:
                 _cls = P2WSH
-                witness_script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
+                witness_script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG').serialize()
                 h = sha256(witness_script)
 
             case _:
@@ -211,9 +211,6 @@ class PublicKey:
         
         prefix = PREFIXES['public_key']['compressed']['even' if b[-1] % 2 == 0 else 'odd']
         return prefix + b[:32]
-
-    def to_hex(self, *, compressed: bool = True) -> str:
-        return self.to_bytes(compressed=compressed).hex()
 
 
 class Address(ABC):
@@ -358,7 +355,7 @@ def from_string(address: str) -> Address:
     return _cls(address)
 
 def from_script_pub_key(data: Script | str, network: NetworkType = DEFAULT_NETWORK) -> Address:
-    script = data if isinstance(data, Script) else Script.from_raw(data)
+    script = data if isinstance(data, Script) else Script.deserialize(data)
     script_len = len(script)
 
     p2pkh = {
@@ -384,16 +381,16 @@ def from_script_pub_key(data: Script | str, network: NetworkType = DEFAULT_NETWO
         64: P2WSH
     }
 
-    check = lambda _dict: all([script.script[index] == value for index, value in _dict.items()])
+    check = lambda _dict: all([script[index] == value for index, value in _dict.items()])
 
     if default_script_lens.get(script_len) is not None:  # if p2pkh/p2sh address
         to_check, cls, hash_index = default_script_lens[script_len]
 
         if check(to_check):
-            return cls.from_hash(bytes.fromhex(script.script[hash_index]), network)
+            return cls.from_hash(bytes.fromhex(script[hash_index]), network)
 
     elif script_len == 2 and check(segwit):  # if segwit address
-        hs = script.script[1]
+        hs = script[1]
         return segwit_script_lens[len(hs)].from_hash(bytes.fromhex(hs))
 
     raise exceptions.InvalidScriptPubKey(data)
