@@ -455,6 +455,20 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     def __repr__(self):
         return str(self.as_dict())
+    
+    @property
+    def weight(self) -> int:
+        w = len(self.serialize(exclude_witnesses=True)) * 4
+        return sum([
+            w,
+            2,  # segwit mark size
+            len(b''.join(dint(len(inp.witness)).pack() + 
+                         inp.witness.serialize(segwit=True) for inp in self.inputs))
+        ]) if self.has_segwit_input() else w
+
+    @property
+    def size(self) -> int:
+        return len(self.serialize())
 
     @classmethod
     def deserialize(cls, raw: bytes) -> 'RawTransaction':
@@ -510,31 +524,14 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     def serialize(self, *, exclude_witnesses: bool = False) -> bytes:
         has_segwit = False if exclude_witnesses else self.has_segwit_input()
-
-        inps_count = dint(len(self.inputs)).pack()
-        inps = b''
-        for inp in self.inputs:
-            inps += inp.serialize()
-
-        outs_count = dint(len(self.outputs)).pack()
-        outs = b''
-        for out in self.outputs:
-            outs += out.serialize()
-
-        witnesses = b''
-        if has_segwit:
-            for inp in self.inputs:
-                witnesses += dint(len(inp.witness)).pack()
-                witnesses += inp.witness.serialize(segwit=True)
-
         return b''.join([
             self.version.pack(),
             b'\x00\x01' if has_segwit else b'',  # segwit mark
-            inps_count,
-            inps,
-            outs_count,
-            outs,
-            witnesses,
+            dint(len(self.inputs)).pack(),
+            b''.join(inp.serialize() for inp in self.inputs),
+            dint(len(self.outputs)).pack(),
+            b''.join(out.serialize() for out in self.outputs),
+            b''.join(dint(len(inp.witness)).pack() + inp.witness.serialize(segwit=True) for inp in self.inputs) if has_segwit else b'',
             self.locktime.pack()
         ])
 
