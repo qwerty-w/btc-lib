@@ -461,10 +461,15 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         w = len(self.serialize(exclude_witnesses=True)) * 4
         return sum([
             w,
-            2,  # segwit mark size
+            2,  # segwit flag+mark size
             len(b''.join(dint(len(inp.witness)).pack() + 
                          inp.witness.serialize(segwit=True) for inp in self.inputs))
         ]) if self.has_segwit_input() else w
+    
+    @property
+    def vsize(self) -> int:
+        vsize = self.weight // 4
+        return vsize + 1 if self.weight % 4 else vsize
 
     @property
     def size(self) -> int:
@@ -526,7 +531,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         has_segwit = False if exclude_witnesses else self.has_segwit_input()
         return b''.join([
             self.version.pack(),
-            b'\x00\x01' if has_segwit else b'',  # segwit mark
+            b'\x00\x01' if has_segwit else b'',  # segwit mark + flag
             dint(len(self.inputs)).pack(),
             b''.join(inp.serialize() for inp in self.inputs),
             dint(len(self.outputs)).pack(),
@@ -561,6 +566,10 @@ class Transaction(RawTransaction):
     def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output], version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
         super().__init__(inputs, outputs, version, locktime)
         self.inputs = ioList(inputs)
+
+    @property
+    def confirmations(self):  # todo:
+        ...
 
     @property
     def fee(self) -> int:
