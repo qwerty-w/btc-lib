@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections import OrderedDict
-from typing import Any, Iterable, Literal, Mapping, Optional, Protocol, Self, TypedDict, \
-    NotRequired, cast, overload, runtime_checkable
+from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
+    NotRequired, cast, runtime_checkable
 import json
 
 from btclib import exceptions
@@ -434,7 +434,7 @@ class TransactionDeserializer:
         return data
 
 
-class ioList[T: 'SupportsAmount'](list[T]):
+class ioList[T: SupportsAmount](list[T]):
     @property
     def amount(self) -> int:
         return sum(x.amount for x in self)
