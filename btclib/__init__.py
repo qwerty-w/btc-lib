@@ -5,7 +5,7 @@ from btclib.address import PrivateKey, PublicKey, P2PKH, P2SH, P2WPKH, P2WSH, Ad
 from btclib.transaction import RawInput, UnsignableInput, Input, Output, RawTransaction, Transaction
 
 
-__version__ = '0.0.2'
+__version__ = '0.2.1'
 
 
 def get_unspent_inputs(*args: tuple[PrivateKey, Address]) -> list['Input']:
