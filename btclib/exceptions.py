@@ -117,5 +117,5 @@ class HexLengthMustBeMultipleTwo(Error):
     msg = 'hex expected, his length multiple of two'
 
 
-class DynamicIntOnlySupportsUnsignedInt(Error):
-    msg = 'dint only supports unsigned int, but {} received'
+class VarIntOnlySupportsUnsignedInt(Error):
+    msg = 'varint only supports unsigned int, but {} received'

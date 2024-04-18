@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from typing import Iterable, Iterator, Optional, SupportsIndex, overload
 
 from btclib.const import OP_CODES, CODE_OPS
-from btclib.utils import dint, pprint_class
+from btclib.utils import varint, pprint_class
 from btclib import exceptions
 
 
@@ -70,7 +70,7 @@ class Script(list[str]):
 
             # if <size> <opcode/bytes>
             else:
-                size, data = dint.unpack(data, increased_separator=segwit)
+                size, data = varint.unpack(data, increased_separator=segwit)
                 item = data[:size]
 
                 # if <opcode size> <opcode> <data>
@@ -100,7 +100,7 @@ class Script(list[str]):
 
                 case _:
                     item = bytes.fromhex(item)
-                    b += dint(len(item)).pack(increased_separator=segwit) + item
+                    b += varint(len(item)).pack(increased_separator=segwit) + item
 
         return b
 
