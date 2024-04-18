@@ -117,10 +117,10 @@ def increased(request):
     return request.param
 
 
-class TestDynamicInt:
+class TestVarInt:
     def test_min_max_size(self, level, increased):
         assert _test_min_max_size(
-            lambda v: dint(v).pack(increased_separator=increased.bool),
+            lambda v: varint(v).pack(increased_separator=increased.bool),
             int_ranges['unsigned'][64 if increased.bool else 32],
             level
         )
@@ -151,15 +151,15 @@ class TestDynamicInt:
         separators_start = 76 if not increased.bool else 253
 
         for integer in range(separators_start):
-            assert dint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
+            assert varint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
-            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            packed = varint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
             assert sep + int_b == packed
 
     def test_pack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
-            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            packed = varint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
 
             assert sep + int_b == packed
 
@@ -167,15 +167,15 @@ class TestDynamicInt:
         separators_start = 76 if not increased.bool else 253
 
         for integer in range(separators_start):
-            assert dint.unpack(bytes([integer]), byteorder, increased_separator=increased.bool)[0] == integer
+            assert varint.unpack(bytes([integer]), byteorder, increased_separator=increased.bool)[0] == integer
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
-            unpacked = dint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
+            unpacked = varint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
             assert int.from_bytes(int_b, byteorder) == unpacked
 
     def test_unpack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
-            out_int, _ = dint.unpack(
+            out_int, _ = varint.unpack(
                 sep + int_b,
                 byteorder,
                 increased_separator=increased.bool

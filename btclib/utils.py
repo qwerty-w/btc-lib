@@ -110,14 +110,14 @@ class uint64(_uint):
     size = 8
 
 
-class dint(int):
+class varint(int):
     def __init__(self, *args, **kwargs):
         if self < 0:
-            raise exceptions.DynamicIntOnlySupportsUnsignedInt(self)
+            raise exceptions.VarIntOnlySupportsUnsignedInt(self)
 
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: byteorder_T = 'little', *,
-               increased_separator: bool = True) -> tuple['dint', bytes]:
+               increased_separator: bool = True) -> tuple['varint', bytes]:
         """
         Receives full data, decoding beginning int, return tuple[int, other_data[int_size:]].
         Most commonly used to get the size of the following data.

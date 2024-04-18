@@ -7,7 +7,7 @@ import json
 from btclib import exceptions
 from btclib.services import NetworkAPI, Unspent
 from btclib.script import Script
-from btclib.utils import d_sha256, uint32, sint64, dint, pprint_class, TypeConverter
+from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, TypeConverter
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
     SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
@@ -118,7 +118,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
         if not exclude_script:
             sig = self.script.serialize()
-            sig_size = dint(len(sig)).pack()
+            sig_size = varint(len(sig)).pack()
             b += sig_size + sig
         if not exclude_sequence:
             b += self.sequence.pack()
@@ -269,7 +269,7 @@ class Output(SupportsAmount, SupportsDump, SupportsSerialize, SupportsCopy):
 
     def serialize(self) -> bytes:
         b = self.script_pub_key.serialize()
-        size = dint(len(b)).pack()
+        size = varint(len(b)).pack()
         return b''.join([self.amount.pack(), size, b])
 
     def as_dict(self) -> OutputDict:
@@ -347,7 +347,7 @@ class _Hash4SignGenerator:
         #     raise exceptions.SegwitHash4SignRequiresInputAmount
 
         s4h_b = script4hash.serialize()
-        s4h_size = dint(len(s4h_b)).pack()
+        s4h_size = varint(len(s4h_b)).pack()
 
         return d_sha256(b''.join([
             tx.version.pack(),
@@ -384,7 +384,7 @@ class TransactionDeserializer:
         return data
 
     def pop_size(self) -> int:
-        size, self.raw = dint.unpack(self.raw)
+        size, self.raw = varint.unpack(self.raw)
         return size
 
     def deserialize(self) -> TransactionDict:
@@ -462,7 +462,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         return sum([
             w,
             2,  # segwit flag+mark size
-            len(b''.join(dint(len(inp.witness)).pack() + 
+            len(b''.join(varint(len(inp.witness)).pack() + 
                          inp.witness.serialize(segwit=True) for inp in self.inputs))
         ]) if self.has_segwit_input() else w
     
@@ -532,11 +532,11 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         return b''.join([
             self.version.pack(),
             b'\x00\x01' if has_segwit else b'',  # segwit mark + flag
-            dint(len(self.inputs)).pack(),
+            varint(len(self.inputs)).pack(),
             b''.join(inp.serialize() for inp in self.inputs),
-            dint(len(self.outputs)).pack(),
+            varint(len(self.outputs)).pack(),
             b''.join(out.serialize() for out in self.outputs),
-            b''.join(dint(len(inp.witness)).pack() + inp.witness.serialize(segwit=True) for inp in self.inputs) if has_segwit else b'',
+            b''.join(varint(len(inp.witness)).pack() + inp.witness.serialize(segwit=True) for inp in self.inputs) if has_segwit else b'',
             self.locktime.pack()
         ])
 
