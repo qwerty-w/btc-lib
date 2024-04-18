@@ -17,7 +17,7 @@ class TypeConverter[expected_T, converted_T]:  # Descriptor
     A descriptor that converts the type that is assigned to an attribute to the set type
     Example: "var = <value>" to "var = __class(<value>)" or "var = __converter(<value>)"
 
-    Example:
+    Usage:
         x: TypeConverter[Iterable[int], int] = TypeConverter(int, sum)
     """
     @overload
