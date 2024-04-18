@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from requests.exceptions import ChunkedEncodingError
 
-from btclib.bit.services import session, BlockstreamAPI, BlockchairAPI, BlockchainAPI, SmartbitAPI,\
-    DEFAULT_TIMEOUT, Unspent, NetworkAPI, BitcoreAPI
+from btclib.bit.services import session, DEFAULT_TIMEOUT, Unspent, NetworkAPI, BitcoreAPI, \
+                                BlockstreamAPI, BlockchairAPI, BlockchainAPI, SmartbitAPI  # type: ignore
 
 
 @dataclass  # move to BTC/services.py
