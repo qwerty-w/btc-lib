@@ -12,7 +12,7 @@ from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERS
 from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_address, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
 from btclib.script import Script
-from btclib.services import NetworkAPI, Unspent
+from btclib.service import NetworkAPI, Unspent
 from btclib import exceptions
 from btclib import bech32
 

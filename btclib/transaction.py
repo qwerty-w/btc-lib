@@ -4,8 +4,10 @@ from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, 
     NotRequired, cast, runtime_checkable
 import json
 
+from attr import dataclass
+
 from btclib import exceptions
-from btclib.services import NetworkAPI, Unspent
+from btclib.service import NetworkAPI, Unspent
 from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, TypeConverter
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
@@ -568,10 +570,6 @@ class Transaction(RawTransaction):
         self.inputs = ioList(inputs)
 
     @property
-    def confirmations(self):  # todo:
-        ...
-
-    @property
     def fee(self) -> int:
         return self.inputs.amount - self.outputs.amount
 
@@ -604,7 +602,7 @@ class Transaction(RawTransaction):
         getter = _Hash4SignGenerator.get_segwit if segwit else _Hash4SignGenerator.get_default
         return getter(self, input_index, script4hash, sighash)
     
-    def default_sign(self, *, pass_unsignable: bool = False) -> None:
+    def default_sign(self, *, pass_unsignable: bool = False) -> None:  # todo: rename to .sign()
         """
         :param pass_unsignable: Pass inputs that don't support .default_sign() otherwise raise AssertionError
         """
@@ -617,3 +615,43 @@ class Transaction(RawTransaction):
                 continue
 
             inp.default_sign(self)
+
+
+class Block(int):
+    def is_mempool(self):
+        return self == -1
+    
+    @classmethod
+    def head(cls):
+        return cls(NetworkAPI.get_head_block())
+
+
+class BroadcastedTransaction:
+    def __init__(self, tx: Transaction, block_height: int, network: NetworkType = DEFAULT_NETWORK):
+        self.tx = tx
+        self.block = Block(block_height)
+        self.network = network
+
+    @classmethod
+    def from_id(cls, txid: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'BroadcastedTransaction':
+        api = NetworkAPI.get_transaction_by_id if network == NetworkType.MAIN else NetworkAPI.get_transaction_by_id_testnet
+        json_tx = api(txid)
+
+        ins: ioList[UnsignableInput] = ioList()
+        for inp in json_tx['vin']:
+            i = UnsignableInput(inp['txid'], inp['vout'], inp['prevout']['value'], inp['sequence'])
+            i.script = inp['scriptsig']
+            i.witness = Script(*inp['witness'])
+
+            ins.append(i)
+
+        outs: ioList[Output] = ioList()
+        for out in json_tx['vout']:
+            outs.append(Output(out['script_pub_key'], out['value']))
+
+        tx = Transaction(ins, outs, json_tx['version'], json_tx['locktime'])
+        return cls(tx, json_tx['status']['block_height'])
+    
+    @property
+    def confirmations(self):  # todo:
+        return Block.head() - self.block
