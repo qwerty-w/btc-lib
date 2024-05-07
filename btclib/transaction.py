@@ -1,16 +1,17 @@
+import json
 from abc import abstractmethod
+from dataclasses import dataclass
 from collections import OrderedDict
 from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
-    NotRequired, cast, runtime_checkable
-import json
+                   NotRequired, cast, runtime_checkable
+
 
 from btclib import exceptions
-from btclib.services import NetworkAPI, Unspent
 from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, TypeConverter
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
-    SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
+                         SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
 
 @runtime_checkable
@@ -41,6 +42,20 @@ class SupportsSerialize(Protocol):
 @runtime_checkable
 class SupportsAmount(Protocol):
     amount: int = NotImplemented
+
+
+class Block(int):
+    def is_mempool(self) -> bool:
+        return self == -1
+
+
+@dataclass
+class Unspent:
+    txid: bytes
+    vout: int
+    amount: int
+    block: Block
+    address: Address
 
 
 class InputDict(TypedDict):
@@ -522,11 +537,6 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         for inp in self.inputs:
             inp.clear()
 
-    def push(self, network: str) -> bool:
-        tx_hex = self.serialize()
-        getattr(NetworkAPI, 'broadcast_tx' + ('_testnet' if network == 'testnet' else ''))(tx_hex)
-        return True
-
     def serialize(self, *, exclude_witnesses: bool = False) -> bytes:
         has_segwit = False if exclude_witnesses else self.has_segwit_input()
         return b''.join([
@@ -563,33 +573,13 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 class Transaction(RawTransaction):
     inputs: TypeConverter[Iterable[UnsignableInput], ioList[UnsignableInput]] = TypeConverter(ioList)
 
-    def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output], version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME):
+    def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output], version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
         super().__init__(inputs, outputs, version, locktime)
         self.inputs = ioList(inputs)
 
     @property
-    def confirmations(self):  # todo:
-        ...
-
-    @property
     def fee(self) -> int:
         return self.inputs.amount - self.outputs.amount
-
-    @classmethod
-    def from_raw_transaction(cls, tx: RawTransaction, network: NetworkType = DEFAULT_NETWORK) -> 'Transaction':
-        """Requires connect to Bitcoin Blockchain APIs to set the amount for each input"""
-        inps: list[UnsignableInput] = []
-
-        for r_inp in tx.inputs:
-            api = getattr(NetworkAPI, 'get_transaction_by_id' + ('_testnet' if network == 'testnet' else ''))
-
-            if (h := api(r_inp.txid)) is None:
-                raise ConnectionError  #  raise exceptions.FailedToGetTransactionData(r_inp.txid)
-
-            inp_tx = RawTransaction.deserialize(h)
-            inps.append(UnsignableInput(r_inp.txid, r_inp.vout, inp_tx.outputs[r_inp.vout].amount, r_inp.sequence))
-
-        return cls(inps, tx.outputs, tx.version, tx.locktime)
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *, segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
         """
@@ -617,3 +607,18 @@ class Transaction(RawTransaction):
                 continue
 
             inp.default_sign(self)
+
+
+class BroadcastedTransaction(Transaction):
+    def __init__(self,
+                 inputs: Iterable[UnsignableInput],
+                 outputs: Iterable[Output], block: int | Block,
+                 network: NetworkType = DEFAULT_NETWORK,
+                 version: int = DEFAULT_VERSION,
+                 locktime: int = DEFAULT_LOCKTIME) -> None:
+        super().__init__(inputs, outputs, version, locktime)
+        self.block = block
+        self.network = network
+
+    def get_confirmations(self, head: Block) -> int:
+        return int(head - self.block)

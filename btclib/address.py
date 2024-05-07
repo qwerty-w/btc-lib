@@ -8,13 +8,12 @@ from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
 from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
+from btclib import bech32
+from btclib import exceptions
+from btclib.script import Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType
 from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_address, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
-from btclib.script import Script
-from btclib.services import NetworkAPI, Unspent
-from btclib import exceptions
-from btclib import bech32
 
 
 class PrivateKey:
@@ -248,12 +247,6 @@ class Address(ABC):
     @abstractmethod
     def _get_script_pub_key(self) -> Script:
         ...
-
-    def get_info(self) -> dict:
-        return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
-
-    def get_unspents(self) -> list[Unspent]:
-        return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
     
     def change_network(self, network: Optional[NetworkType] = None) -> 'Address':
         if network == self.network:
