@@ -81,10 +81,11 @@ class TransactionDict(TypedDict):
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     """An input that doesn't have info about amount"""
 
+    txid: TypeConverter[str | bytes, bytes] = TypeConverter(bytes, bytes.fromhex)
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     sequence: TypeConverter[int, uint32] = TypeConverter(uint32)
 
-    def __init__(self, txid: str, vout: int, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, sequence: int = DEFAULT_SEQUENCE):
         """
         :param txid: Transaction hex.
         :param vout: Unspent output index in transaction.
@@ -98,7 +99,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         self.witness = Script()
 
     def __repr__(self) -> str:
-        return f'{self.txid}:{self.vout}'
+        return f'{self.txid.hex()}:{self.vout}'
 
     @classmethod
     def from_unspent(cls, unspent: Unspent, sequence: int = DEFAULT_SEQUENCE) -> 'RawInput':
@@ -117,7 +118,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         self.script = Script()
         self.witness = Script()
 
-    def _copy(self, ins: Self) -> Self:
+    def _copy(self, ins: Self) -> Self:  # fixme: Self ?
         ins.script = self.script
         ins.witness = self.witness
         return ins
@@ -127,7 +128,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
     def serialize(self, *, exclude_script: bool = False, exclude_sequence: bool = False) -> bytes:
         b = b''.join([
-            bytes.fromhex(self.txid)[::-1],
+            self.txid[::-1],
             self.vout.pack()
         ])
 
@@ -142,7 +143,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
     def as_dict(self) -> InputDict:
         d: InputDict = {
-            'txid': self.txid,
+            'txid': self.txid.hex(),
             'vout': self.vout,
             'script': self.script.serialize().hex()
         }  # type: ignore
@@ -163,7 +164,7 @@ class UnsignableInput(RawInput, SupportsAmount):
 
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, txid: str, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE):
         """
         :param amount: Input amount
         """
@@ -191,7 +192,7 @@ class UnsignableInput(RawInput, SupportsAmount):
 class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
 
-    def __init__(self, txid: str, vout: int, amount: int, private: PrivateKey, address: Address, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, amount: int, private: PrivateKey, address: Address, sequence: int = DEFAULT_SEQUENCE):
         """
         :param key: PrivateKey of the address below.
         :param address: Address that the Input belongs to.
@@ -498,7 +499,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         inputs = []
         for inp_dict in d['inputs']:
             inp_instance = RawInput(
-                inp_dict['txid'],
+                bytes.fromhex(inp_dict['txid']),
                 inp_dict['vout'],
                 sequence=inp_dict['sequence']
             )
@@ -594,7 +595,7 @@ class Transaction(RawTransaction):
         getter = _Hash4SignGenerator.get_segwit if segwit else _Hash4SignGenerator.get_default
         return getter(self, input_index, script4hash, sighash)
     
-    def default_sign(self, *, pass_unsignable: bool = False) -> None:
+    def default_sign(self, *, pass_unsignable: bool = False) -> None:  # todo: rename to .sign()
         """
         :param pass_unsignable: Pass inputs that don't support .default_sign() otherwise raise AssertionError
         """
