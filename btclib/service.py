@@ -181,7 +181,7 @@ class BlockchairAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['inputs']:
-            i = UnsignableInput(inp['transaction_hash'], inp['index'], inp['value'])
+            i = UnsignableInput(bytes.fromhex(inp['transaction_hash']), inp['index'], inp['value'])
             i.script = Script.deserialize(inp['spending_signature_hex'])
             i.witness = Script(*inp['spending_witness'].split(','))
             ins.append(i)
@@ -267,7 +267,7 @@ class BlockstreamAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['vin']:
-            i = UnsignableInput(inp['txid'], inp['vout'], inp['prevout']['value'] if inp['prevout'] else 0, inp['sequence'])
+            i = UnsignableInput(bytes.fromhex(inp['txid']), inp['vout'], inp['prevout']['value'] if inp['prevout'] else 0, inp['sequence'])
             i.script = Script.deserialize(inp['scriptsig'])
             i.witness = Script(*inp.get('witness', []))
 
@@ -349,7 +349,7 @@ class BlockchainAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['inputs']:
-            i = UnsignableInput(inp['txid'], inp['output'], inp['value'], inp['sequence'])
+            i = UnsignableInput(bytes.fromhex(inp['txid']), inp['output'], inp['value'], inp['sequence'])
             i.script = Script.deserialize(inp['sigscript'])
             i.witness = Script(*inp['witness'])
 
