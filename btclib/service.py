@@ -1,5 +1,4 @@
 import typing
-import logging
 from abc import ABC
 from dataclasses import dataclass
 import requests
@@ -33,24 +32,12 @@ class NetworkError(Exception):
         return f'{self.api.__class__.__name__}[{self.status_code}]'
 
 
-class ExceededLimitError(NetworkError):
-    pass
-
-
-class NotFoundError(NetworkError):
-    pass
-
-
-class ExcessiveAddress(NetworkError):
-    pass
-
-
-class ServiceUnavailableError(NetworkError):
-    pass
-
-
-class AddressOverflowError(NetworkError):
-    pass
+# exceptions
+class ExceededLimitError(NetworkError):...
+class NotFoundError(NetworkError): ...
+class ExcessiveAddress(NetworkError): ...
+class ServiceUnavailableError(NetworkError): ...
+class AddressOverflowError(NetworkError): ...
 
 
 @dataclass
@@ -181,7 +168,7 @@ class BlockchairAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['inputs']:
-            i = UnsignableInput(bytes.fromhex(inp['transaction_hash']), inp['index'], inp['value'])
+            i = UnsignableInput(bytes.fromhex(inp['transaction_hash']), inp['index'], inp['value'], inp['spending_sequence'])
             i.script = Script.deserialize(inp['spending_signature_hex'])
             i.witness = Script(*inp['spending_witness'].split(','))
             ins.append(i)
@@ -270,11 +257,10 @@ class BlockstreamAPI(BaseAPI):
             i = UnsignableInput(bytes.fromhex(inp['txid']), inp['vout'], inp['prevout']['value'] if inp['prevout'] else 0, inp['sequence'])
             i.script = Script.deserialize(inp['scriptsig'])
             i.witness = Script(*inp.get('witness', []))
-
             ins.append(i)
         return BroadcastedTransaction(
             ins,
-            ioList(Output(out['script_pub_key'], out['value']) for out in data['vout']),  # fixme:
+            ioList(Output(out['scriptpubkey'], out['value']) for out in data['vout']),
             data['status'].get('block_height', -1),
             self.network,
             data['version'],
@@ -417,13 +403,7 @@ class BlockcypherAPI(BaseAPI):
     pushing: dict[str, str] = NotImplemented
 
     def handle_response(self, r: requests.Response) -> None:
-        """
-        .get and .post methods call this function for handle response
-        """
-        if r.status_code == 404:
-            raise NotFoundError(self, r)
-        if r.status_code != 200:  # fixme: 200 <= x < 300
-            raise NetworkError(self, r)
+        pass
     
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         raise NotImplementedError

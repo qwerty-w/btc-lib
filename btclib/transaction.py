@@ -462,8 +462,8 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
     version: TypeConverter[int, uint32] = TypeConverter(uint32)
     locktime: TypeConverter[int, uint32] = TypeConverter(uint32)
 
-    def __init__(self, inputs: Iterable[RawInput], outputs: Iterable[Output], version: int = DEFAULT_VERSION,
-                 locktime: int = DEFAULT_LOCKTIME):
+    def __init__(self, inputs: Iterable[RawInput], outputs: Iterable[Output],
+                 version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
         self.inputs = list(inputs)
         self.outputs = ioList(outputs)
         self.version = version
@@ -472,6 +472,13 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def __repr__(self):
         return str(self.as_dict())
     
+    def __eq__(self, value: object) -> bool:
+        match value:
+            case RawTransaction():
+                return self.as_dict() == value.as_dict()
+            case _:
+                return super().__eq__(value)
+
     @property
     def weight(self) -> int:
         w = len(self.serialize(exclude_witnesses=True)) * 4
@@ -574,7 +581,8 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 class Transaction(RawTransaction):
     inputs: TypeConverter[Iterable[UnsignableInput], ioList[UnsignableInput]] = TypeConverter(ioList)
 
-    def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output], version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
+    def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output],
+                 version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
         super().__init__(inputs, outputs, version, locktime)
         self.inputs = ioList(inputs)
 
