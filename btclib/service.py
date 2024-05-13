@@ -485,8 +485,8 @@ class Service(BaseAPI):
     
     Priority: 
     """
-    _api_priority_T = set[type[BaseAPI]]
-    _network_errors_T = set[type[NetworkError] | type[ConnectionError]]
+    _api_priority_T = list[type[BaseAPI]]
+    _network_errors_T = list[type[NetworkError] | type[ConnectionError]]
 
     def __init__(self,
                  network: NetworkType = DEFAULT_NETWORK,
@@ -502,13 +502,13 @@ class Service(BaseAPI):
         super().__init__(network, session, timeout)
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
-        self.ignored_errors = ignored_errors or set()
+        self.ignored_errors = ignored_errors or []
 
     def resolve_priority(self, function: typing.Callable, priority: typing.Optional[_api_priority_T]) -> _api_priority_T:
         """Resolve and filters basepriority, self.priority and default Service.priority"""
         p: Service._api_priority_T = priority or self.priority.get(function, self.basepriority)
-        return set(filter(lambda a: a.supports_network(self.network), p))
-    
+        return list(filter(lambda a: a.supports_network(self.network), p))  # fixme: filter changes priority sort !
+
     def call(self,
              attr: str,
              args: typing.Iterable,
@@ -524,7 +524,6 @@ class Service(BaseAPI):
             try:
                 return method(*args, **kwargs)
             except tuple(ignored_errors or self.ignored_errors) as e:
-                print(e)
                 errors[api] = e
 
         raise ServiceError('none of the called api provided a result', attr, p, errors)
@@ -549,7 +548,7 @@ class Service(BaseAPI):
 
     def get_address_transactions(self, address: Address, *args, **kwargs) -> list[BroadcastedTransaction]:
         """Only BlockstreamAPI is used, pagination between services not implemented"""
-        return self.call('get_address_transactions', [address], {}, {BlockstreamAPI})
+        return self.call('get_address_transactions', [address], {}, [BlockstreamAPI])
 
     def get_unspent(self,
                     address: Address,
@@ -590,21 +589,21 @@ class Service(BaseAPI):
     # == default props ==
 
     # base priority for any api method
-    basepriority: _api_priority_T = {
+    basepriority: _api_priority_T = [
         BlockchainAPI,
         BlockstreamAPI,
         BlockchairAPI,
         BlockcypherAPI,
         BitcoreAPI
-    }
+    ]
     # custom priority for each method
     # priority: dict[typing.Callable, _api_priority_T] = {
-    #     get_address: set(),
-    #     get_transaction: set(),
-    #     get_transactions: set(),
-    #     get_address_transactions: set(),
-    #     get_unspent: set(),
-    #     head: set(),
-    #     push: set()
+    #     get_address: [],
+    #     get_transaction: [],
+    #     get_transactions: [],
+    #     get_address_transactions: [],
+    #     get_unspent: [],
+    #     head: [],
+    #     push: []
     # }
     priority: dict[typing.Callable, _api_priority_T] = {}
