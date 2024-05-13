@@ -5,7 +5,7 @@ import requests
 
 from btclib.script import Script
 from btclib.address import Address, PrivateKey
-from btclib.const import DEFAULT_NETWORK, NetworkType
+from btclib.const import NetworkType, DEFAULT_NETWORK, DEFAULT_SERVICE_TIMEOUT
 from btclib.transaction import Block, Unspent, RawTransaction, Transaction, BroadcastedTransaction, ioList, UnsignableInput, Input, Output
 
 
@@ -59,8 +59,11 @@ class BaseAPI(ABC):
 
     _unsupported_network_error = lambda s, n: TypeError(f'{s.__class__.__name__} doesn\'t support {n.value} network')
 
-    def __init__(self, session: requests.Session, network: NetworkType, timeout: int = 10) -> None:
-        self.session = session
+    def __init__(self,
+                 network: NetworkType = DEFAULT_NETWORK,
+                 session: typing.Optional[requests.Session] = None,
+                 timeout: int = DEFAULT_SERVICE_TIMEOUT) -> None:
+        self.session = session or requests.Session()
         self.network = network
         self.timeout = timeout
 
@@ -490,13 +493,13 @@ class Service(BaseAPI):
                  basepriority: typing.Optional[_api_priority_T] = None,
                  priority: typing.Optional[dict[typing.Callable, _api_priority_T]] = None,
                  session: typing.Optional[requests.Session] = None,
-                 timeout: int = 10,
+                 timeout: int = DEFAULT_SERVICE_TIMEOUT,
                  ignored_errors: typing.Optional[_network_errors_T] = None) -> None:
         """
         :param basepriority:
         :param priority:
         """
-        super().__init__(session or requests.Session(), network, timeout)
+        super().__init__(network, session, timeout)
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
         self.ignored_errors = ignored_errors or set()
@@ -516,7 +519,7 @@ class Service(BaseAPI):
         errors: dict[BaseAPI, Exception] = {}
 
         for T in p:
-            api = T(self.session, self.network, self.timeout)
+            api = T(self.network, self.session, self.timeout)
             method = getattr(api, attr)
             try:
                 return method(*args, **kwargs)
