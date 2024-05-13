@@ -66,3 +66,11 @@ class TestAPIs:
         txs = f(address, **k)
         assert len(txs) > 0
         assert all(isinstance(tx, BroadcastedTransaction) for tx in txs)
+
+    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['network']))
+    def test_head(self, session: Session, network: NetworkType, api: API):
+        if api is not BlockchainAPI or network is NetworkType.MAIN:
+            return
+        h = api(session, network).head()
+        assert not h.is_mempool()
+        assert h > { NetworkType.MAIN: 840000, NetworkType.TEST: 2800000 }[network]  # last halving
