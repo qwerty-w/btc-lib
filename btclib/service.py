@@ -24,12 +24,12 @@ class NetworkError(Exception):
     api: 'BaseAPI'
     response: requests.Response
 
-    def __post__init__(self) -> None:
+    def __post_init__(self) -> None:
         self.status_code: int = self.response.status_code
         self.request: requests.PreparedRequest = self.response.request
 
     def __str__(self) -> str:  # todo:
-        return f'{self.api.__class__.__name__}[{self.status_code}]'
+        return f'{self.api.__class__.__name__} {self.status_code} {self.request.url}'
 
 
 # exceptions
@@ -279,7 +279,7 @@ class BlockstreamAPI(BaseAPI):
         """Blockstream returns 50 unconfirmed (mempool) and 25 confirmed transactions. 
            Mempool transactions can be more than 50, but Blockstream doesn't process them.
 
-        :param handle_overflow: raise error if mempool transactions more than Blockstream returns 
+        :param handle_overflow: if true raise error if mempool transactions can be more than Blockstream returns 
         """
         if last_seen_txid:
             return list(map(self.process_transaction, self.get(
@@ -289,11 +289,12 @@ class BlockstreamAPI(BaseAPI):
                 last_seen_txid=last_seen_txid).json()
             ))
         
-        mempool = self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string), type='mempool', handle_response=False).json()
+        mr = self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string), type='mempool', handle_response=False)
+        mempool = mr.json()
         if len(mempool) == 50 and handle_overflow:
-            raise AddressOverflowError(self, mempool)
-        self.handle_response(mempool)
-        
+            raise AddressOverflowError(self, mr)
+        self.handle_response(mr)
+
         chain = self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string), type='chain').json()
         return list(map(self.process_transaction, mempool + chain))
 
