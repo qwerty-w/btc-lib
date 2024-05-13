@@ -139,6 +139,45 @@ class IsCompressed:
         self.bool = value
 
 
+def pytest_configure(config: pytest.Config):
+    for line in [
+        'excluded: exclude test',
+        'uncollect_if(*, func): function to unselect test from parametrization (mark all unselected test as "excluded")'
+    ]:
+        config.addinivalue_line('markers', line)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_collectreport(report: pytest.CollectReport):
+    """Handle "uncollect_if" and "excluded" marks for report items"""
+    kept = []
+    for item in report.result:
+        if isinstance(item, pytest.Function):
+            if item.get_closest_marker('excluded'):
+                continue
+
+            if m := item.get_closest_marker('uncollect_if'):
+                func = m.kwargs['func']
+                kwargs = item.callspec.params if hasattr(item, 'callspec') else {}
+                try:
+                    r = func(item, **kwargs)
+                except TypeError as e:
+                    raise TypeError('"uncollect_if" func and test func must '
+                                    'have same parameterization arguments') from e
+                if r:
+                    item.add_marker('excluded')
+                    continue
+        kept.append(item)
+
+    report.result[:] = kept
+    yield
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]):
+    """Handle "excluded" mark for tests items"""
+    items[:] = filter(lambda x: not x.get_closest_marker('excluded'), items)
+
+
 @pytest.fixture(params=[NetworkType.MAIN, NetworkType.TEST])
 def network(request) -> NetworkType:
     return request.param
