@@ -69,6 +69,9 @@ class IsIncreased:
         self.string = 'increased' if value else 'default'
         self.bool = value
 
+    def __repr__(self) -> str:
+        return str(self.bool)
+
 
 def _test_min_max_size(cls, values, level):
     value = values[0 if level == 'min' else 1]
@@ -132,19 +135,25 @@ class TestVarInt:
         for sep, max_size in SEPARATORS[increased.string].items():
             for bsize in range(index, max_size + 1):
                 int_b = random.randbytes(bsize)
-                # fill with b'\x00' to max_size
+
+                # bsize can be 2 and in this case final number can be < 253
+                if not int_b[0]:
+                    int_b = bytes([random.randint(1, 255)]) + int_b[1:]
                 int_b = b''.join(b'\x00' for _ in range(max_size - bsize)) + int_b
                 int_b = int_b[::-1 if byteorder == 'little' else 1]
 
+                print('randbytes:', sep, max_size, bsize, int_b)
                 yield sep, int_b
 
             index = max_size + 1
 
     @staticmethod
     def _one_bsize_gen(sep_start, increased, byteorder):
+        sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
         for integer in range(sep_start, 256):
-            sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
-            int_b = ((b'\x00' if increased.bool else b'') + bytes([integer]))[::-1 if byteorder == 'little' else 1]
+            int_b = bytes([integer])
+            if increased.bool:
+                int_b = (b'\x00' + int_b)[::-1 if byteorder == 'little' else 1]
             yield sep, int_b
 
     def test_pack_one_bsize_separator(self, byteorder, increased):
@@ -154,13 +163,14 @@ class TestVarInt:
             assert varint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
-            packed = varint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
             assert sep + int_b == packed
 
     def test_pack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
-            packed = varint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
 
+            print('vars:', ' / '.join(str(x) for x in [sep, int_b, packed]))
             assert sep + int_b == packed
 
     def test_unpack_one_bsize_separator(self, increased, byteorder):
