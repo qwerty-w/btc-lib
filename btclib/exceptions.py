@@ -105,17 +105,6 @@ class FailedToGetTransactionData(Error):
     msg = 'failed to connect to get transaction {} data'
 
 
-class IntSizeGreaterThanMaxSize(Error):
-    msg = 'received int ({}) is greater than the max size ({} bytes)'
-
-
-class UintGotSint(Error):
-    msg = 'unsigned int got signed int (for {} use sint)'
-
-
 class HexLengthMustBeMultipleTwo(Error):
     msg = 'hex expected, his length multiple of two'
 
-
-class VarIntOnlySupportsUnsignedInt(Error):
-    msg = 'varint only supports unsigned int, but {} received'

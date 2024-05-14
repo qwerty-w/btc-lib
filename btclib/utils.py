@@ -64,16 +64,18 @@ class _int(int, ABC):
     size: int = NotImplemented  # byte size
     _signed: bool = NotImplemented
 
+    __integer_overflow_error = lambda _, i, s: OverflowError(f'received int ({i}) is greater than the max size ({s} bytes)')
+
     def __init__(self, i: int):
         try:
             super().to_bytes(self.size, 'big', signed=self._signed)
         except OverflowError:
-            raise exceptions.IntSizeGreaterThanMaxSize(i, self.size) from None
+            raise self.__integer_overflow_error(i, self.size) from None
 
     @classmethod
     def unpack(cls, value: bytes, byteorder: byteorder_T = 'little') -> Self:
         if len(value) > cls.size:
-            raise exceptions.IntSizeGreaterThanMaxSize(value, cls.size)
+            raise cls.__integer_overflow_error(cls, value, cls.size)
 
         return cls(int.from_bytes(value, byteorder, signed=cls._signed))
 
@@ -96,9 +98,8 @@ class sint64(_sint):
 class _uint(_int):
     _signed = False
 
-    def __init__(self, i: int):
-        if i < 0:
-            raise exceptions.UintGotSint(i)
+    def __init__(self, i: int):  # fixme:
+        assert self >= 0, f'unsigned int received signed int (for {i} use sint)'
         super().__init__(i)
 
 
@@ -112,8 +113,7 @@ class uint64(_uint):
 
 class varint(int):
     def __init__(self, *args, **kwargs):
-        if self < 0:
-            raise exceptions.VarIntOnlySupportsUnsignedInt(self)
+        assert self >= 0, f'varint only supports unsigned int, but {self} received'
 
     @classmethod
     def unpack(cls, raw_data: bytes, byteorder: byteorder_T = 'little', *,
