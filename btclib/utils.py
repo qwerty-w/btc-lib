@@ -1,12 +1,11 @@
 import hashlib
-from typing import Any, Callable, Iterable, Literal, Optional, Self, TypeVar, overload
 from abc import ABC
-from base58check import b58decode
 from decimal import Decimal
+from typing import Any, Callable, Iterable, Literal, Optional, Self, overload
+from base58check import b58decode
 
 from btclib import bech32
 from btclib.const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED, AddressType, NetworkType
-from btclib import exceptions
 
 
 byteorder_T = Literal['little', 'big']
