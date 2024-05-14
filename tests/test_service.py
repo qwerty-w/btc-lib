@@ -44,33 +44,51 @@ def uncollect_apis(get_network_f: typing.Callable[[dict[str, typing.Any]], str |
     return inner
 
 
+@pytest.fixture(params=[
+    (address.P2WPKH('bc1q7wn3nmhnvsr0q2gg8nnntga9u93ycl3nj6nf0h'), NetworkType.MAIN),
+    (address.P2SH('2N1rjhumXA3ephUQTDMfGhufxGQPZuZUTMk'), NetworkType.TEST)
+])
+def addr(request: pytest.FixtureRequest) -> tuple[Address, NetworkType]:
+    return request.param
+
+
 class TestAPIs:
+    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
+    def test_get_address(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+        address, network = addr
+        inf = api(network, session).get_address(address)
+        assert isinstance(inf, AddressInfo)
+        assert all(isinstance(x, int) for x in [inf.received, inf.balance, inf.spent, inf.tx_count])
+
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['transaction']['network']))
     def test_get_transaction(self, session: Session, api: API, transaction: dict[str, typing.Any]):
-        tx = api(session, transaction['network'], timeout=API_TIMEOUT).get_transaction(transaction['id'])
+        tx = api(transaction['network'], session, timeout=API_TIMEOUT).get_transaction(transaction['id'])
         assert tx.serialize().hex() == transaction['serialized']
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['transaction']['network']))
     def test_get_transactions(self, session: Session, api: API, transaction: dict[str, typing.Any]):
-        txs = api(session, transaction['network'], timeout=API_TIMEOUT).get_transactions([transaction['id']])
+        txs = api(transaction['network'], session, timeout=API_TIMEOUT).get_transactions([transaction['id']])
         assert all(map(lambda tx: tx.serialize().hex() == transaction['serialized'], txs))
 
-    @pytest.mark.parametrize('address, network', [
-        (address.P2WPKH('bc1q7wn3nmhnvsr0q2gg8nnntga9u93ycl3nj6nf0h'), NetworkType.MAIN),
-        (address.P2SH('2N1rjhumXA3ephUQTDMfGhufxGQPZuZUTMk'), NetworkType.TEST)
-    ])
-    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['network']))
-    def test_get_address_transactions(self, session: Session, address: Address, network: NetworkType, api: API):
-        f = api(session, network, timeout=API_TIMEOUT).get_address_transactions
+    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
+    def test_get_address_transactions(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+        address, network = addr
+        f = api(network, session, timeout=API_TIMEOUT).get_address_transactions
         k = {'length': 10} if 'length' in f.__code__.co_varnames else {}
         txs = f(address, **k)
         assert len(txs) > 0
         assert all(isinstance(tx, BroadcastedTransaction) for tx in txs)
 
+    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
+    def test_get_unspent(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+        address, network = addr
+        un = api(network, session).get_unspent(address)
+        assert all(isinstance(u, Unspent) for u in un)
+
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['network']))
     def test_head(self, session: Session, network: NetworkType, api: API):
         if api is not BlockchainAPI or network is NetworkType.MAIN:
             return
-        h = api(session, network).head()
+        h = api(network, session).head()
         assert not h.is_mempool()
         assert h > { NetworkType.MAIN: 840000, NetworkType.TEST: 2800000 }[network]  # last halving
