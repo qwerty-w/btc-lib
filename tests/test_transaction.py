@@ -6,12 +6,13 @@ import pytest
 from btclib import address
 from btclib.transaction import *
 from btclib.const import AddressType, NetworkType
-from conftest import GetterObject
+from tests.conftest import GetterObject
 
 
 def prepare_tx(tx):
     instance_inps = []
     for inp in tx.inputs:
+        inp.txid = bytes.fromhex(inp.txid)
         inp_instance = Input(
             inp.txid,
             inp.vout,
@@ -148,7 +149,7 @@ class TestTransaction:
         assert tx.serialized == tx.instance.serialize().hex()
 
     def test_deserialize(self, tx):
-        des = Transaction.deserialize(bytes.fromhex(tx.serialized))
+        des = RawTransaction.deserialize(bytes.fromhex(tx.serialized))
 
         for attr in 'inputs', 'outputs':
             assert len(getattr(des, attr)) == len(getattr(tx, attr))
