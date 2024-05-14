@@ -21,12 +21,24 @@ class TypeConverter[expected_T, converted_T]:  # Descriptor
         x: TypeConverter[Iterable[int], int] = TypeConverter(int, sum)
     """
     @overload
-    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], Optional[converted_T]]] = None, *, optional: Literal[True]): ...
+    def __init__(self,
+                 __class: type[converted_T],
+                 __converter: Optional[Callable[[Any], Optional[converted_T]]] = None,
+                 *,
+                 optional: Literal[True]) -> None: ...
 
     @overload
-    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], converted_T]] = None, *, optional: Literal[False] = False): ...
+    def __init__(self,
+                 __class: type[converted_T],
+                 __converter: Optional[Callable[[Any], converted_T]] = None,
+                 *,
+                 optional: Literal[False] = False) -> None: ...
 
-    def __init__(self, __class: type[converted_T], __converter: Optional[Callable[[Any], Optional[converted_T] | converted_T]] = None, *, optional: bool = False):
+    def __init__(self,
+                 __class: type[converted_T],
+                 __converter: Optional[Callable[[Any], Optional[converted_T] | converted_T]] = None,
+                 *,
+                 optional: bool = False) -> None:
         """
         :param __class: The type of the object should be
         :param __converter: A function (or something Callable) called to convert received object to type in __class
@@ -66,11 +78,11 @@ class _int(int, ABC):
 
     __integer_overflow_error = lambda _, i, s: OverflowError(f'received int ({i}) is greater than the max size ({s} bytes)')
 
-    def __init__(self, i: int):
+    def __init__(self, *args, **kwargs) -> None:
         try:
             super().to_bytes(self.size, 'big', signed=self._signed)
         except OverflowError:
-            raise self.__integer_overflow_error(i, self.size) from None
+            raise self.__integer_overflow_error(self, self.size) from None
 
     @classmethod
     def unpack(cls, value: bytes, byteorder: byteorder_T = 'little') -> Self:
@@ -98,9 +110,9 @@ class sint64(_sint):
 class _uint(_int):
     _signed = False
 
-    def __init__(self, i: int):  # fixme:
-        assert self >= 0, f'unsigned int received signed int (for {i} use sint)'
-        super().__init__(i)
+    def __init__(self, *args, **kwargs) -> None:
+        assert self >= 0, f'unsigned int received signed int (for {self} use sint)'
+        super().__init__(self)
 
 
 class uint32(_uint):
@@ -112,7 +124,7 @@ class uint64(_uint):
 
 
 class varint(int):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         assert self >= 0, f'varint only supports unsigned int, but {self} received'
 
     @classmethod
@@ -207,7 +219,7 @@ def bytes2int(value: bytes, byteorder: byteorder_T = 'big', *, signed: bool = Fa
     return int.from_bytes(value, byteorder, signed=signed)
 
 
-def get_magic_hash(message: str):
+def get_magic_hash(message: str) -> bytes:
     pref = b'Bitcoin Signed Message:\n'
     message_b = message.encode()
     return d_sha256(b''.join([
@@ -280,7 +292,7 @@ def to_bitcoins(value: int) -> float:
     return float(Decimal(str(value)) / 100000000)
 
 
-def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}):
+def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}) -> str:
     cls = class_or_instance if isinstance(class_or_instance, type) else type(class_or_instance)
     name = cls.__qualname__
     all_args = ', '.join(
