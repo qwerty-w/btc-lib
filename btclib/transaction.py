@@ -2,7 +2,7 @@ import json
 from abc import abstractmethod
 from dataclasses import dataclass
 from collections import OrderedDict
-from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
+from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypeVar, TypedDict, \
                    NotRequired, cast, runtime_checkable
 
 
@@ -12,13 +12,6 @@ from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, TypeCon
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
-
-
-@runtime_checkable
-class SupportsCopy(Protocol):
-    @abstractmethod
-    def copy(self) -> 'SupportsCopy':
-        ...
 
 
 @runtime_checkable
@@ -40,8 +33,20 @@ class SupportsSerialize(Protocol):
 
 
 @runtime_checkable
+class SupportsCopy(Protocol):
+    @abstractmethod
+    def copy(self) -> 'SupportsCopy':
+        ...
+
+
+@runtime_checkable
 class SupportsAmount(Protocol):
     amount: int = NotImplemented
+
+
+@runtime_checkable
+class SupportsCopyAndAmount(SupportsCopy, SupportsAmount, Protocol):
+    ...
 
 
 class Block(int):
@@ -156,7 +161,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         return super().as_json(self.as_dict(), indent=indent)
 
 
-class UnsignableInput(RawInput, SupportsAmount):
+class UnsignableInput(RawInput, SupportsCopyAndAmount):
     """
     An input that has info about the amount, but doesn't have PrivateKey, 
     which is why it can't be signed using .default_sign (but can still using .custom_sign)
@@ -252,7 +257,7 @@ class Input(UnsignableInput):
         return d
 
 
-class Output(SupportsAmount, SupportsDump, SupportsSerialize, SupportsCopy):
+class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
     def __init__(self, script_pub_key: str | Script, amount: int):
@@ -450,10 +455,13 @@ class TransactionDeserializer:
         return data
 
 
-class ioList[T: SupportsAmount](list[T]):
+class ioList[T: SupportsCopyAndAmount](list[T]):
     @property
     def amount(self) -> int:
         return sum(x.amount for x in self)
+    
+    def copy(self) -> list[T]:
+        return ioList(i.copy() for i in self)
 
 
 class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
@@ -584,11 +592,31 @@ class Transaction(RawTransaction):
     def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output],
                  version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
         super().__init__(inputs, outputs, version, locktime)
-        self.inputs = ioList(inputs)
+        self.inputs = inputs if isinstance(inputs, ioList) else ioList(inputs)
 
     @property
     def fee(self) -> int:
         return self.inputs.amount - self.outputs.amount
+
+    @classmethod
+    def fromraw(cls, r: RawTransaction, amounts: list[int]) -> 'Transaction':  # todo: add keys arg maybe
+        """
+        :param amounts: Amounts for each input
+        """
+        assert len(r.inputs) == len(amounts), 'inputs and amounts length must be same'
+        return cls(
+            ioList(UnsignableInput(i.txid, i.vout, a, i.sequence) for i, a in zip(r.inputs, amounts)),
+            r.outputs,
+            r.version,
+            r.locktime
+        )
+
+    @classmethod
+    def deserialize(cls, raw: bytes, amounts: list[int]) -> RawTransaction:
+        """
+        :param amounts: Amounts for each input
+        """
+        return cls.fromraw(RawTransaction.deserialize(raw), amounts)    
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *, segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
         """
@@ -610,24 +638,42 @@ class Transaction(RawTransaction):
         for inp in self.inputs:
             try:
                 assert isinstance(inp, Input), f'supports only Input (not {type(inp).__name__})'
-            except Exception as e:
+            except AssertionError as e:
                 if not pass_unsignable:
-                    raise e
+                    raise e from None
                 continue
 
             inp.default_sign(self)
 
 
 class BroadcastedTransaction(Transaction):
+    block: TypeConverter[int, Block] = TypeConverter(Block)
+
     def __init__(self,
                  inputs: Iterable[UnsignableInput],
-                 outputs: Iterable[Output], block: int | Block,
+                 outputs: Iterable[Output],
+                 block: int | Block,
                  network: NetworkType = DEFAULT_NETWORK,
                  version: int = DEFAULT_VERSION,
                  locktime: int = DEFAULT_LOCKTIME) -> None:
         super().__init__(inputs, outputs, version, locktime)
-        self.block = block
+        self.block = Block(block)
         self.network = network
+
+    @classmethod
+    def fromraw(cls,
+                r: RawTransaction | Transaction,
+                block: int | Block,
+                network: NetworkType,
+                amounts: Optional[list[int]] = None) -> 'BroadcastedTransaction':
+        """Convert RawTransaction/Transaction to BroadcastedTransaction"""
+        if type(r) is RawTransaction:
+            assert amounts, 'for RawTransaction amounts should be specified'
+            ins = ioList(UnsignableInput(i.txid, i.vout, a, i.sequence) for i, a in zip(r.inputs, amounts))
+        else:
+            ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
+
+        return cls(ins, r.outputs, block, network, r.version, r.locktime)
 
     def get_confirmations(self, head: Block) -> int:
         return int(head - self.block)
