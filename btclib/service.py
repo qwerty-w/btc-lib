@@ -485,8 +485,8 @@ class Service(BaseAPI):
     
     Priority: 
     """
-    _api_priority_T = list[type[BaseAPI]]
-    _network_errors_T = list[type[NetworkError] | type[ConnectionError]]
+    type _api_priority_T = list[type[BaseAPI]]
+    type _network_errors_T = list[type[NetworkError] | type[ConnectionError]]
 
     def __init__(self,
                  network: NetworkType = DEFAULT_NETWORK,

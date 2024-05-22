@@ -2,7 +2,7 @@ import json
 from abc import abstractmethod
 from dataclasses import dataclass
 from collections import OrderedDict
-from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypeVar, TypedDict, \
+from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
                    NotRequired, cast, runtime_checkable
 
 
@@ -180,7 +180,7 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
         return pprint_class(self, kwargs=self.as_dict())
 
     @classmethod
-    def from_unspent(cls, unspent: Unspent, sequence: int = DEFAULT_SEQUENCE) -> RawInput:
+    def from_unspent(cls, unspent: Unspent, sequence: int = DEFAULT_SEQUENCE) -> 'UnsignableInput':
         return cls(unspent.txid, unspent.vout, unspent.amount, sequence)
 
     def copy(self) -> 'UnsignableInput':
@@ -664,7 +664,7 @@ class BroadcastedTransaction(Transaction):
     def fromraw(cls,
                 r: RawTransaction | Transaction,
                 block: int | Block,
-                network: NetworkType,
+                network: NetworkType = DEFAULT_NETWORK,
                 amounts: Optional[list[int]] = None) -> 'BroadcastedTransaction':
         """Convert RawTransaction/Transaction to BroadcastedTransaction"""
         if type(r) is RawTransaction:
@@ -674,6 +674,10 @@ class BroadcastedTransaction(Transaction):
             ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
 
         return cls(ins, r.outputs, block, network, r.version, r.locktime)
+    
+    @classmethod
+    def deserialize(cls, raw: bytes, amounts: list[int], block: int | Block, network: NetworkType = DEFAULT_NETWORK) -> 'BroadcastedTransaction':
+        return cls.fromraw(RawTransaction.deserialize(raw), block, network, amounts)
 
     def get_confirmations(self, head: Block) -> int:
         return int(head - self.block)
