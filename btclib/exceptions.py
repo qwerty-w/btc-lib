@@ -40,16 +40,8 @@ class InvalidCompressionFormat(InvalidError):  # todo: remove
     msg = 'invalid compression format - {}'
 
 
-class InvalidScriptPubKey(InvalidError):
-    msg = 'invalid scriptPubKey - {}'
-
-
 class InvalidHexOrOpcode(InvalidError):
     msg = 'hex/opcode expected, \'{}\' received'
-
-
-class InvalidInputScriptData(InvalidError):
-    msg = 'str/bytes/int expected, {} received'
 
 
 class InvalidByteorder(InvalidError):
@@ -103,8 +95,3 @@ class SegwitHash4SignRequiresInputAmount(Error):
 
 class FailedToGetTransactionData(Error):
     msg = 'failed to connect to get transaction {} data'
-
-
-class HexLengthMustBeMultipleTwo(Error):
-    msg = 'hex expected, his length multiple of two'
-
