@@ -5,48 +5,49 @@ from btclib.utils import varint, pprint_class
 from btclib import exceptions
 
 
-type InputItem = str | bytes | list[int]
+type InputItem = bytes | str | Iterable[int]
 
 
-def validate(item: InputItem) -> Optional[str]:
+def validate(item: InputItem, *, opcodes: bool = True) -> Optional[bytes]:
     """
-    :param item: hex/opcode/bytes/list of bytes
+    :param item: bytes/hex/opcode (if opcodes)/byte array
+    :param opcodes: validate opcodes
+    :param 
     """
     match item:
-        case _ if not isinstance(item, (str, bytes, list)):
-            raise TypeError(f'str/bytes/list[int] expected, {type(item)} received')
-
-        case _ if not len(item):
+        case str() | bytes() if not len(item):
             return None
 
-        case list():  # list[int]
-            return bytes(item).hex()
-
-        case str() if item.startswith('OP_'):  # opcode
-            if item not in OP_CODES:
+        case str() if item.startswith('OP_') and opcodes:  # opcode
+            if not (v := OP_CODES.get(item)):
                 raise ValueError(f'unknown opcode \'{item}\'')
-            return item
+            return v
 
         case str():  # hex
             assert not len(item) % 2, 'hex expected, his length multiple of two'
             try:
-                bytes.fromhex(item)
+                return bytes.fromhex(item)
             except ValueError:
                 raise exceptions.InvalidHexOrOpcode(item) from None
+
+        case bytes():
             return item
 
-        case bytes():  # bytes
-            return item.hex()
+        case Iterable():
+            return bytes(item) or None  # Iterable[int] can be empty
+
+        case _:
+            raise TypeError(f'str/bytes/Iterable[int] expected, {type(item)} received')
 
 
-def validator(script: Iterable[InputItem]) -> Iterator[str]:
+def validator(script: Iterable[InputItem]) -> Iterator[bytes]:
     for item in script:
         if not (v := validate(item)):
             continue
         yield v
 
 
-class Script(list[str]):
+class Script(list[bytes]):
     @overload
     def __init__(self,
                  *data: InputItem,
@@ -55,15 +56,15 @@ class Script(list[str]):
 
     @overload
     def __init__(self,
-                 *data: Iterable[str],
+                 *data: bytes,
                  _validation: Literal[False],
                  _frozen: Optional[bytes] = None) -> None: ...
 
     def __init__(self,
-                 *data: InputItem | Iterable[str],
+                 *data: InputItem | Iterable[bytes],
                  _validation: bool = True,
                  _frozen: Optional[bytes] = None) -> None:
-        super().__init__(validator(cast(tuple[InputItem], data)) if _validation else cast(Iterable[str], data))
+        super().__init__(validator(cast(tuple[InputItem], data)) if _validation else cast(tuple[bytes], data))
         self._frozen = _frozen
 
     @classmethod
@@ -71,34 +72,27 @@ class Script(list[str]):
                     length: Optional[int] = None, freeze: bool = False) -> Self:
         """
         :param raw: hex/bytes/list of bytes
-        :param segwit:
+        :param segwit: 
         :param length: items count
         :param freeze: make script frozen: script .serialize() will returns deserialized value
                        until the first internal change (need for coinbase transactions in
                        which the script input can be arbitrary)
         """
-        script: list[str] = []
-        data = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw) if isinstance(raw, list) else raw
+        script: list[bytes] = []
+        data = validate(raw, opcodes=False) or b''
         _frozen = data if freeze else None
 
         count = 0
         while len(data) > 0 and (length is None or count < length):
             # if <opcode> <...>
-            if not segwit and (op := CODE_OPS.get(data[:1])):
-                item, size = op, 1
+            if not segwit and (item := data[:1]) in CODE_OPS:
+                size = 1
 
             # if <size> <opcode/bytes> <...>
             else:
                 size, data = varint.unpack(data, increased_separator=segwit)
                 b = data[:size]
-
-                match size:
-                    case 0:
-                        item = 'OP_0'
-                    case 1:
-                        item = CODE_OPS.get(b, b.hex())
-                    case _:
-                        item = b.hex()
+                item = b if size else OP_CODES['OP_0']
 
             script.append(item)
             data = data[size:]
@@ -118,18 +112,10 @@ class Script(list[str]):
 
         b = b''
         for item in self:
-            match item:
-                case '00' | 'OP_0':
-                    b += b'\x00'
-
-                case _ if item.startswith('OP_'):
-                    # <op size> + <op> if segwit else <op>
-                    b += (b'\x01' if segwit else b'') + OP_CODES[item]
-
-                case _:
-                    item = bytes.fromhex(item)
-                    b += varint(len(item)).pack(increased_separator=segwit) + item
-
+            length = len(item)
+            if length > 1 or item not in CODE_OPS or segwit:
+                b += varint(length).pack(increased_separator=segwit)
+            b += item
         return b
 
     def append(self, instance: InputItem) -> None:
@@ -148,7 +134,10 @@ class Script(list[str]):
         return type(self)(*self, _validation=False)
 
     def __repr__(self) -> str:
-        return pprint_class(self, args=self)
+        return pprint_class(self, args=[
+            opcode if len(item) == 1 and (opcode := CODE_OPS.get(item)) else item.hex()
+            for item in self
+        ])
 
     def __eq__(self, other: 'Script') -> bool:
         if not isinstance(other, Script):
