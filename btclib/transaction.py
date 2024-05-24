@@ -442,8 +442,7 @@ class TransactionDeserializer:
         # witnesses
         if segwit:
             for inp_index in range(inps_count):
-                items_count = self.pop_size()
-                script = Script.deserialize(self.raw, segwit=True, max_items=items_count)
+                script = Script.deserialize(self.raw, segwit=True, length=self.pop_size())
                 data['inputs'][inp_index]['witness'] = script.serialize(segwit=True).hex()
 
                 # sort order

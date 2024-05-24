@@ -1,5 +1,4 @@
-from collections.abc import Iterable
-from typing import Iterable, Iterator, Optional, SupportsIndex, overload
+from typing import cast, overload, Self, Literal, Iterable, Iterator, Optional, SupportsIndex
 
 from btclib.const import OP_CODES, CODE_OPS
 from btclib.utils import varint, pprint_class
@@ -10,11 +9,14 @@ type InputItem = str | bytes | list[int]
 
 
 def validate(item: InputItem) -> Optional[str]:
+    """
+    :param item: hex/opcode/bytes/list of bytes
+    """
     match item:
         case _ if not isinstance(item, (str, bytes, list)):
-            raise exceptions.InvalidInputScriptData(type(item))
+            raise TypeError(f'str/bytes/list[int] expected, {type(item)} received')
 
-        case _ if not len(item):  # empty
+        case _ if not len(item):
             return None
 
         case list():  # list[int]
@@ -22,19 +24,15 @@ def validate(item: InputItem) -> Optional[str]:
 
         case str() if item.startswith('OP_'):  # opcode
             if item not in OP_CODES:
-                raise ValueError(f'unknown opcode: {item}')
-
+                raise ValueError(f'unknown opcode \'{item}\'')
             return item
 
         case str():  # hex
-            if len(item) % 2 > 0:
-                raise exceptions.HexLengthMustBeMultipleTwo
-
+            assert not len(item) % 2, 'hex expected, his length multiple of two'
             try:
                 bytes.fromhex(item)
             except ValueError:
                 raise exceptions.InvalidHexOrOpcode(item) from None
-            
             return item
 
         case bytes():  # bytes
@@ -43,52 +41,82 @@ def validate(item: InputItem) -> Optional[str]:
 
 def validator(script: Iterable[InputItem]) -> Iterator[str]:
     for item in script:
-        valid = validate(item)
-        if not valid:
+        if not (v := validate(item)):
             continue
-        yield valid
+        yield v
 
 
 class Script(list[str]):
-    def __init__(self, *data: InputItem) -> None:
-        super().__init__(validator(data))
+    @overload
+    def __init__(self,
+                 *data: InputItem,
+                 _validation: Literal[True] = True,
+                 _frozen: Optional[bytes] = None) -> None: ...
+
+    @overload
+    def __init__(self,
+                 *data: Iterable[str],
+                 _validation: Literal[False],
+                 _frozen: Optional[bytes] = None) -> None: ...
+
+    def __init__(self,
+                 *data: InputItem | Iterable[str],
+                 _validation: bool = True,
+                 _frozen: Optional[bytes] = None) -> None:
+        super().__init__(validator(cast(tuple[InputItem], data)) if _validation else cast(Iterable[str], data))
+        self._frozen = _frozen
 
     @classmethod
     def deserialize(cls, raw: InputItem, *, segwit: bool = False,
-                    max_items: Optional[int] = None) -> 'Script':
-        script = []
+                    length: Optional[int] = None, freeze: bool = False) -> Self:
+        """
+        :param raw: hex/bytes/list of bytes
+        :param segwit:
+        :param length: items count
+        :param freeze: make script frozen: script .serialize() will returns deserialized value
+                       until the first internal change (need for coinbase transactions in
+                       which the script input can be arbitrary)
+        """
+        script: list[str] = []
         data = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw) if isinstance(raw, list) else raw
+        _frozen = data if freeze else None
 
         count = 0
-        while len(data) > 0 and (max_items is None or count < max_items):
-            fb = data[0:1]
-            op = CODE_OPS.get(fb)
-
-            # if <opcode> <data>
-            if op and not segwit:
+        while len(data) > 0 and (length is None or count < length):
+            # if <opcode> <...>
+            if not segwit and (op := CODE_OPS.get(data[:1])):
                 item, size = op, 1
 
-            # if <size> <opcode/bytes>
+            # if <size> <opcode/bytes> <...>
             else:
                 size, data = varint.unpack(data, increased_separator=segwit)
-                item = data[:size]
+                b = data[:size]
 
-                # if <opcode size> <opcode> <data>
-                op = 'OP_0' if size == 0 else CODE_OPS.get(item) if size == 1 else None
-                item = op if op is not None else item
+                match size:
+                    case 0:
+                        item = 'OP_0'
+                    case 1:
+                        item = CODE_OPS.get(b, b.hex())
+                    case _:
+                        item = b.hex()
 
             script.append(item)
             data = data[size:]
             count += 1
 
-        return cls(*script)
+        return cls(*script, _validation=False, _frozen=_frozen)
+
+    def is_frozen(self) -> bool:
+        return self._frozen is not None
 
     def is_empty(self) -> bool:
         return not len(self)
 
     def serialize(self, *, segwit: bool = False) -> bytes:
-        b = b''
+        if self.is_frozen():
+            return cast(bytes, self._frozen)
 
+        b = b''
         for item in self:
             match item:
                 case '00' | 'OP_0':
@@ -104,19 +132,20 @@ class Script(list[str]):
 
         return b
 
-    def append(self, __object: InputItem) -> None:
-        _object = validate(__object)
-        return super().append(_object) if _object else None
+    def append(self, instance: InputItem) -> None:
+        self._frozen = None
+        return super().append(v) if (v := validate(instance)) else None
 
-    def extend(self, __iterable: Iterable[InputItem]) -> None:
-        return super().extend(validator(__iterable))
+    def extend(self, iterable: Iterable[InputItem]) -> None:
+        self._frozen = None
+        return super().extend(validator(iterable))
     
-    def insert(self, __index: SupportsIndex, __object: InputItem) -> None:
-        _object = validate(__object)
-        return super().insert(__index, _object) if _object else None
+    def insert(self, index: SupportsIndex, instance: InputItem) -> None:
+        self._frozen = None
+        return super().insert(index, v) if (v := validate(instance)) else None
     
     def copy(self) -> 'Script':
-        return Script(*super().copy())
+        return type(self)(*self, _validation=False)
 
     def __repr__(self) -> str:
         return pprint_class(self, args=self)
@@ -126,21 +155,27 @@ class Script(list[str]):
             return False
         return super().__eq__(other)
 
-    def __add__(self, __object: 'Script') -> 'Script':
-        if not isinstance(__object, Script):
-            raise TypeError(f'can only concatenate Script (not "{type(__object).__name__}") to Script')
-        return Script(*self, *__object)
+    def __add__(self, instance: 'Script') -> 'Script':
+        if not isinstance(instance, Script):
+            raise TypeError(f'can only concatenate Script (not "{type(instance).__name__}") to Script')
+        return type(self)(*self, *instance)
 
-    def __iadd__(self, __value: Iterable[InputItem]) -> 'Script':
-        return super().__iadd__(validator(__value))
+    def __iadd__(self, instance: Iterable[InputItem]) -> 'Script':
+        self._frozen = None
+        return super().__iadd__(validator(instance))
 
     @overload
-    def __setitem__(self, __key: SupportsIndex, __value: InputItem) -> None: ...
+    def __setitem__(self, key: SupportsIndex, instance: InputItem) -> None:
+        ...
     @overload
-    def __setitem__(self, __key: slice, __value: Iterable[InputItem]) -> None: ...
-    def __setitem__(self, __key, __value) -> None:
-        if isinstance(__key, SupportsIndex):
-            return super().__setitem__(__key, __v) if (__v := validate(__value)) else None
-        if isinstance(__key, slice):
-            return super().__setitem__(__key, validator(__value))
-        raise TypeError(f'Script indices must be integers or slices, not {type(__key).__name__}')
+    def __setitem__(self, key: slice, instance: Iterable[InputItem]) -> None:
+        ...
+    def __setitem__(self, key, instance) -> None:
+        self._frozen = None
+        match key:
+            case SupportsIndex():
+                return super().__setitem__(key, v) if (v := validate(instance)) else None
+            case slice():
+                return super().__setitem__(key, validator(instance))
+            case _:
+                raise TypeError(f'indices must be integers or slices, not {type(key).__name__}')
