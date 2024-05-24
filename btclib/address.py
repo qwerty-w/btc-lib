@@ -11,7 +11,7 @@ from sympy import sqrt_mod
 from btclib import bech32
 from btclib import exceptions
 from btclib.script import Script
-from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType
+from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
 from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_address, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
 
@@ -349,7 +349,7 @@ def from_string(address: str) -> Address:
 
 def from_script_pub_key(data: Script | str, network: NetworkType = DEFAULT_NETWORK) -> Address:
     script = data if isinstance(data, Script) else Script.deserialize(data)
-    script_len = len(script)
+    length = len(script)
 
     p2pkh = {
         0: 'OP_DUP',
@@ -365,25 +365,25 @@ def from_script_pub_key(data: Script | str, network: NetworkType = DEFAULT_NETWO
         0: 'OP_0'
     }
 
-    default_script_lens = {
+    default_script_lens: dict[int, tuple[dict[int, str], type[DefaultAddress], int]] = {
         5: (p2pkh, P2PKH, 2),
-        3: (p2sh, P2SH, 1),
+        3: (p2sh, P2SH, 1)
     }
-    segwit_script_lens = {
-        40: P2WPKH,
-        64: P2WSH
+    segwit_script_lens: dict[int, type[SegwitAddress]] = {
+        20: P2WPKH,
+        32: P2WSH
     }
 
-    check = lambda _dict: all([script[index] == value for index, value in _dict.items()])
+    check = lambda _dict: all([script[index] == OP_CODES[value] for index, value in _dict.items()])
 
-    if default_script_lens.get(script_len) is not None:  # if p2pkh/p2sh address
-        to_check, cls, hash_index = default_script_lens[script_len]
+    if default_script_lens.get(length) is not None:  # if p2pkh/p2sh address
+        to_check, cls, hash_index = default_script_lens[length]
 
         if check(to_check):
-            return cls.from_hash(bytes.fromhex(script[hash_index]), network)
+            return cls.from_hash(script[hash_index], network)
 
-    elif script_len == 2 and check(segwit):  # if segwit address
+    elif length == 2 and check(segwit):  # if segwit address
         hs = script[1]
-        return segwit_script_lens[len(hs)].from_hash(bytes.fromhex(hs))
+        return segwit_script_lens[len(hs)].from_hash(hs)
 
-    raise exceptions.InvalidScriptPubKey(data)
+    raise ValueError(f'unsupported address \'{data}\'')
