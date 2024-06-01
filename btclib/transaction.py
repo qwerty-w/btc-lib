@@ -111,13 +111,13 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     def from_unspent(cls, unspent: Unspent, sequence: int = DEFAULT_SEQUENCE) -> 'RawInput':
         return cls(unspent.txid, unspent.vout, sequence)
 
-    def custom_sign(self, script: Optional[str | Script], witness: Optional[str | Script]) -> None:
+    def custom_sign(self, script: Optional[Script], witness: Optional[Script]) -> None:
         for n, v in {
             'script': script,
             'witness': witness
         }.items():
             if v:
-                setattr(self, n, Script.deserialize(v) if isinstance(v, str) else v)
+                setattr(self, n, v)
 
     def clear(self):
         """Clear the script and the witness signatures"""

@@ -20,7 +20,7 @@ def prepare_tx(tx):
             pv := PrivateKey.from_wif(inp.wif),
             pv.public.get_address(AddressType[inp.type.replace('-', '_')], NetworkType.TEST)
         )
-        inp_instance.custom_sign(inp.script, inp.witness)
+        inp_instance.custom_sign(Script.deserialize(inp.script), Script.deserialize(inp.witness, segwit=True))
 
         instance_inps.append(inp_instance)
 
