@@ -113,7 +113,7 @@ class Script(list[bytes]):
         b = b''
         for item in self:
             length = len(item)
-            if length > 1 or item not in CODE_OPS or segwit:
+            if item != OP_CODES['OP_0'] and (segwit or length > 1 or item not in CODE_OPS):
                 b += varint(length).pack(increased_separator=segwit)
             b += item
         return b
