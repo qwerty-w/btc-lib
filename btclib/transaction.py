@@ -191,6 +191,17 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
         return dict(d)
 
 
+class CoinbaseInput(UnsignableInput):
+    def __init__(self, script: bytes, witness: bytes = b'\x00' * 32):
+        """
+        :param script: Serialized script
+        :param witness: Serialized witness
+        """
+        super().__init__(b'\x00' * 32, 4294967295, 0, 4294967295)
+        self.script = Script.deserialize(script, freeze=True)
+        self.witness = Script.deserialize(witness, segwit=True, freeze=True)
+
+
 class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
 
@@ -512,15 +523,18 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         # convert dict inputs to Input objects
         inputs = []
         for inp_dict in d['inputs']:
-            inp_instance = RawInput(
-                bytes.fromhex(inp_dict['txid']),
-                inp_dict['vout'],
-                sequence=inp_dict['sequence']
-            )
-            inp_instance.custom_sign(
-                Script.deserialize(inp_dict['script']),
-                Script.deserialize(inp_dict.get('witness', ''), segwit=True)
-            )
+            script, witness = bytes.fromhex(inp_dict['script']), bytes.fromhex(inp_dict.get('witness', ''))
+            if inp_dict['txid'] == b'\x00' * 32:
+                inp_instance = CoinbaseInput(script, witness)
+
+            else:
+                inp_instance = RawInput(
+                    bytes.fromhex(inp_dict['txid']),
+                    inp_dict['vout'],
+                    sequence=inp_dict['sequence'],
+                    script=Script.deserialize(script),
+                    witness=Script.deserialize(witness, segwit=True)
+                )
 
             inputs.append(inp_instance)
 
@@ -530,6 +544,12 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             outputs.append(Output(out_dict['script_pub_key'], out_dict['amount']))
 
         return RawTransaction(inputs, outputs, d['version'], d['locktime'])
+
+    def is_coinbase(self):
+        return any(isinstance(i, CoinbaseInput) for i in self.inputs)
+
+    def has_segwit_input(self) -> bool:  # todo: rename
+        return any([not inp.witness.is_empty() for inp in self.inputs])
 
     def get_id(self) -> str:
         return d_sha256(self.serialize(exclude_witnesses=True))[::-1].hex()
@@ -544,10 +564,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         """
         return _Hash4SignGenerator.get_default(self, input_index, script4hash, sighash)
 
-    def has_segwit_input(self) -> bool:
-        return any([not inp.witness.is_empty() for inp in self.inputs])
-
-    def clear_inputs(self):
+    def clear_inputs(self) -> None:
         """Apply Input.clear() to all inputs"""
         for inp in self.inputs:
             inp.clear()
@@ -595,7 +612,7 @@ class Transaction(RawTransaction):
 
     @property
     def fee(self) -> int:
-        return self.inputs.amount - self.outputs.amount
+        return self.inputs.amount - self.outputs.amount if not self.is_coinbase() else 0
 
     @classmethod
     def fromraw(cls, r: RawTransaction, amounts: list[int]) -> 'Transaction':  # todo: add keys arg maybe
@@ -604,7 +621,17 @@ class Transaction(RawTransaction):
         """
         assert len(r.inputs) == len(amounts), 'inputs and amounts length must be same'
         return cls(
-            ioList(UnsignableInput(i.txid, i.vout, a, i.sequence, i.script, i.witness) for i, a in zip(r.inputs, amounts)),
+            ioList(
+                UnsignableInput(
+                    i.txid,
+                    i.vout,
+                    a,
+                    i.sequence,
+                    i.script,
+                    i.witness
+                ) if not isinstance(i, CoinbaseInput) else i.copy()
+                for i, a in zip(r.inputs, amounts)
+            ),
             r.outputs,
             r.version,
             r.locktime
@@ -668,12 +695,22 @@ class BroadcastedTransaction(Transaction):
         """Convert RawTransaction/Transaction to BroadcastedTransaction"""
         if type(r) is RawTransaction:
             assert amounts, 'for RawTransaction amounts should be specified'
-            ins = ioList(UnsignableInput(i.txid, i.vout, a, i.sequence, i.script, i.witness) for i, a in zip(r.inputs, amounts))
+            ins = ioList(
+                UnsignableInput(
+                    i.txid,
+                    i.vout,
+                    a,
+                    i.sequence,
+                    i.script,
+                    i.witness
+                ) if not isinstance(i, CoinbaseInput) else i.copy()
+                for i, a in zip(r.inputs, amounts)
+            )
         else:
             ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
 
         return cls(ins, r.outputs, block, network, r.version, r.locktime)
-    
+
     @classmethod
     def deserialize(cls, raw: bytes, amounts: list[int], block: int | Block, network: NetworkType = DEFAULT_NETWORK) -> 'BroadcastedTransaction':
         return cls.fromraw(RawTransaction.deserialize(raw), block, network, amounts)
