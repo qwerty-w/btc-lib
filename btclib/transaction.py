@@ -124,13 +124,8 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         self.script = Script()
         self.witness = Script()
 
-    def _copy(self, ins: Self) -> Self:  # fixme: Self ?
-        ins.script = self.script
-        ins.witness = self.witness
-        return ins
-
     def copy(self) -> 'RawInput':
-        return self._copy(self.__class__(self.txid, self.vout, self.sequence))
+        return RawInput(self.txid, self.vout, self.sequence, self.script, self.witness)
 
     def serialize(self, *, exclude_script: bool = False, exclude_sequence: bool = False) -> bytes:
         b = b''.join([
@@ -186,7 +181,7 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
         return cls(unspent.txid, unspent.vout, unspent.amount, sequence)
 
     def copy(self) -> 'UnsignableInput':
-        return self._copy(self.__class__(self.txid, self.vout, self.amount, self.sequence))
+        return UnsignableInput(self.txid, self.vout, self.amount, self.sequence, self.script, self.witness)
 
     def as_dict(self) -> dict[str, str | uint32 | sint64]:
         d = cast(OrderedDict[str, str | uint32 | sint64], OrderedDict(super().as_dict()))
@@ -253,7 +248,7 @@ class Input(UnsignableInput):
                 raise exceptions.InvalidAddressInstanceType(type(self.address))
     
     def copy(self) -> 'Input':
-        return self._copy(self.__class__(self.txid, self.vout, self.amount, self.private, self.address, self.sequence))
+        return Input(self.txid, self.vout, self.amount, self.private, self.address, self.sequence, self.script, self.witness)
 
     def as_dict(self) -> dict:
         d = super().as_dict()
