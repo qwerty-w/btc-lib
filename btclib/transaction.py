@@ -90,7 +90,8 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     sequence: TypeConverter[int, uint32] = TypeConverter(uint32)
 
-    def __init__(self, txid: bytes, vout: int, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, sequence: int = DEFAULT_SEQUENCE,
+                 script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
         """
         :param txid: Transaction hex.
         :param vout: Unspent output index in transaction.
@@ -100,8 +101,8 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         self.vout = vout
         self.sequence = sequence
 
-        self.script = Script()
-        self.witness = Script()
+        self.script = script or Script()
+        self.witness = witness or Script()
 
     def __repr__(self) -> str:
         return f'{self.txid.hex()}:{self.vout}'
@@ -169,11 +170,12 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
 
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, txid: bytes, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE,
+                 script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
         """
         :param amount: Input amount
         """
-        super().__init__(txid, vout, sequence)
+        super().__init__(txid, vout, sequence, script, witness)
         self.amount = amount
 
     def __repr__(self) -> str:
@@ -197,12 +199,14 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
 class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
 
-    def __init__(self, txid: bytes, vout: int, amount: int, private: PrivateKey, address: Address, sequence: int = DEFAULT_SEQUENCE):
+    def __init__(self, txid: bytes, vout: int, amount: int, private: PrivateKey,
+                 address: Address, sequence: int = DEFAULT_SEQUENCE, script: Optional[Script] = None,
+                 witness: Optional[Script] = None) -> None:
         """
         :param key: PrivateKey of the address below.
         :param address: Address that the Input belongs to.
         """
-        super().__init__(txid, vout, amount, sequence)
+        super().__init__(txid, vout, amount, sequence, script, witness)
         self.private = private
         self.address = address
 
@@ -605,7 +609,7 @@ class Transaction(RawTransaction):
         """
         assert len(r.inputs) == len(amounts), 'inputs and amounts length must be same'
         return cls(
-            ioList(UnsignableInput(i.txid, i.vout, a, i.sequence) for i, a in zip(r.inputs, amounts)),
+            ioList(UnsignableInput(i.txid, i.vout, a, i.sequence, i.script, i.witness) for i, a in zip(r.inputs, amounts)),
             r.outputs,
             r.version,
             r.locktime
@@ -616,7 +620,7 @@ class Transaction(RawTransaction):
         """
         :param amounts: Amounts for each input
         """
-        return cls.fromraw(RawTransaction.deserialize(raw), amounts)    
+        return cls.fromraw(RawTransaction.deserialize(raw), amounts)
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *, segwit: bool, sighash: int = SIGHASHES['all']) -> bytes:
         """
@@ -669,7 +673,7 @@ class BroadcastedTransaction(Transaction):
         """Convert RawTransaction/Transaction to BroadcastedTransaction"""
         if type(r) is RawTransaction:
             assert amounts, 'for RawTransaction amounts should be specified'
-            ins = ioList(UnsignableInput(i.txid, i.vout, a, i.sequence) for i, a in zip(r.inputs, amounts))
+            ins = ioList(UnsignableInput(i.txid, i.vout, a, i.sequence, i.script, i.witness) for i, a in zip(r.inputs, amounts))
         else:
             ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
 
