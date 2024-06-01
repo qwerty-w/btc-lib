@@ -164,10 +164,10 @@ class BlockchairAPI(BaseAPI):
     }
 
     def handle_response(self, r: requests.Response):
-        if r.status_code == 403:
+        if r.status_code in [403, 430]:
             raise ExceededLimitError(self, r)
         return super().handle_response(r)
-    
+
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['inputs']:
@@ -212,9 +212,9 @@ class BlockchairAPI(BaseAPI):
     def get_address_transactions(self, address: Address, length: int, offset: int = 0) -> list[BroadcastedTransaction]:
         params = {
             'limit': f'{length},0',
-            'offset': offset
+            'offset': f'{offset},0'
         }
-        r = self.get('address', {'params': params}, address=address.string, handle_response=False)
+        r = self.get('address', {'params': params}, address=address.string)
         return self.get_transactions(r.json()['data'][address.string]['transactions'])
 
     def get_unspent(self, address: Address) -> list[Unspent]:

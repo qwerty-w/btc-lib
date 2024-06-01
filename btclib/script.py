@@ -33,7 +33,7 @@ def validate(item: InputItem, *, opcodes: bool = True) -> Optional[bytes]:
         case bytes():
             return item
 
-        case Iterable():
+        case _ if isinstance(item, Iterable):
             return bytes(item) or None  # Iterable[int] can be empty
 
         case _:
