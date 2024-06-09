@@ -66,7 +66,7 @@ class TypeConverter[expected_T, converted_T]:  # Descriptor
             v: Optional[converted_T] = self.converter(value)
             assert v is not None or self.optional, 'converter can\'t return None if optional=False'
         else:
-            v = self.cls(value)
+            v = self.cls(value)  # type: ignore
 
         instance.__dict__[self.name] = v
 
