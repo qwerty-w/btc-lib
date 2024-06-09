@@ -3,6 +3,7 @@ import random
 import hashlib
 from collections import namedtuple
 
+from .conftest import addrobj
 from btclib.utils import *
 
 
@@ -220,8 +221,8 @@ def test_bytes2int_signed(i2b_items):
     assert integer == bytes2int(integer_bytes, byteorder, signed=True)
 
 
-def test_get_address_network_correct_data(address, network):
-    assert network == get_address_network(address.string[network.value])
+def test_get_address_network_correct_data(address: addrobj, network):
+    assert network == get_address_network(address.json['string'][network.value])
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
@@ -229,12 +230,12 @@ def test_get_address_network_incorrect_data(incorrect_address):
     assert get_address_network(incorrect_address) is None
 
 
-def test_get_address_type(address, network):
-    assert get_address_type(address.string[network.value]) == address.instance.type
+def test_get_address_type(address: addrobj, network):
+    assert address.type == address.ins.type == get_address_type(address.json['string'][network.value])
 
 
-def test_validate_address_correct_data(address, network):
-    assert validate_address(address.string[network.value], address.instance.type, network)
+def test_validate_address_correct_data(address: addrobj, network):
+    assert validate_address(address.json['string'][network.value], address.type, network)
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)

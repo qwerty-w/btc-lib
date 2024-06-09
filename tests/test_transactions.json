@@ -33,6 +33,7 @@
                 "serialized": "d7ad06000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
             }
         ],
+        "segwit": false,
         "fee": 10000,
         "version": 2,
         "locktime": 0,
@@ -43,7 +44,7 @@
         "inputs": [
             {
                 "wif": "L5F9GbmZseYSRh7bWycCH766GE5y5ozzhv4ysQsU4kZiFgu2gGzK",
-                "type": "P2SH-P2WPKH",
+                "type": "P2SH_P2WPKH",
                 "txid": "01808971984dcdfbcc7e8afc2bba85345be40f12713dc2edae29718eaeb1f7a9",
                 "vout": 0,
                 "amount": 437719,
@@ -75,6 +76,7 @@
 
             }
         ],
+        "segwit": true,
         "fee": 10000,
         "version": 2,
         "locktime": 0,
@@ -118,6 +120,7 @@
 
             }
         ],
+        "segwit": true,
         "fee": 10000,
         "version": 2,
         "locktime": 0,
@@ -161,6 +164,7 @@
 
             }
         ],
+        "segwit": true,
         "fee": 10000,
         "version": 2,
         "locktime": 0,
