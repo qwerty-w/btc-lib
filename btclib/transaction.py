@@ -201,6 +201,12 @@ class CoinbaseInput(UnsignableInput):
         self.script = Script.deserialize(script, freeze=True)
         self.witness = Script.deserialize(witness, segwit=True, freeze=True)
 
+    def __repr__(self) -> str:
+        return pprint_class(self, kwargs={
+            'script': self.script.serialize().hex(),
+            'witness': self.witness.serialize(segwit=True).hex()
+        })
+
 
 class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
@@ -436,7 +442,7 @@ class TransactionDeserializer:
             data['inputs'].append({
                 'txid': self.pop(32)[::-1].hex(),
                 'vout': uint32.unpack(self.pop(4)),
-                'script': Script.deserialize(self.pop(self.pop_size())).serialize().hex(),
+                'script': self.pop(self.pop_size()).hex(),
                 'sequence': uint32.unpack(self.pop(4))
             })
 
@@ -518,13 +524,13 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     @classmethod
     def deserialize(cls, raw: bytes) -> 'RawTransaction':
-        d = TransactionDeserializer(raw).deserialize()
+        d: TransactionDict = TransactionDeserializer(raw).deserialize()
 
         # convert dict inputs to Input objects
         inputs = []
         for inp_dict in d['inputs']:
             script, witness = bytes.fromhex(inp_dict['script']), bytes.fromhex(inp_dict.get('witness', ''))
-            if inp_dict['txid'] == b'\x00' * 32:
+            if bytes.fromhex(inp_dict['txid']) == b'\x00' * 32:
                 inp_instance = CoinbaseInput(script, witness)
 
             else:
