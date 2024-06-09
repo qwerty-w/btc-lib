@@ -21,8 +21,22 @@ def session() -> requests.Session:
     return requests.Session()
 
 
-@pytest.fixture(params=[BlockchairAPI, BlockstreamAPI, BlockchainAPI, BitcoreAPI])  # todo:  add BlockcypherAPI
-def api(request: pytest.FixtureRequest) -> API:
+@pytest.fixture(params=[BlockstreamAPI, BlockchairAPI, BlockchainAPI, BitcoreAPI])  # todo:  add BlockcypherAPI
+def api(request: pytest.FixtureRequest, pytestconfig: pytest.Config) -> API:
+    no_service: str = pytestconfig.getoption('--no-service', default=None)  # type: ignore
+    if no_service:
+        no_service = no_service.strip()
+
+        for sep in [', ', ',', ' ']:
+            if sep in no_service:
+                names = no_service.split(sep)
+                break
+        else:
+            names = [no_service]
+
+        if request.param.__name__ in names:
+            pytest.skip('cause in --no-service')
+
     return request.param
 
 
