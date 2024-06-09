@@ -178,8 +178,8 @@ class TestTransaction:
     def test_copy(self, tx: txobj):
         _test_copy(tx.ins, ['version', 'locktime'], isnot=['inputs', 'outputs'])
 
-    def test_has_segwit_input(self, tx: txobj):
-        assert tx.json['segwit'] is tx.ins.has_segwit_input()
+    def test_is_segwit(self, tx: txobj):
+        assert tx.json['segwit'] is tx.ins.is_segwit()
 
     def test_get_id(self, tx: txobj):
         assert tx.json['id'] == tx.ins.get_id()
