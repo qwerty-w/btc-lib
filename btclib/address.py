@@ -20,17 +20,16 @@ class PrivateKey:
     def __init__(self, key: Optional[SigningKey] = None):
         self.key = key if key else SigningKey.generate(SECP256k1)
         self.public = PublicKey(self.key.get_verifying_key())  # type: ignore
-        self.bytes = self.key.to_string()
 
     @classmethod
     def from_wif(cls, wif: str) -> 'PrivateKey':
-        data = b58decode(wif.encode('utf-8'))
+        data = b58decode(wif.encode('utf8'))
         key = data[:-4]
         checksum = data[-4:]
 
         h = d_sha256(key)
         if not checksum == h[0:4]:
-            raise exceptions.InvalidWIF(wif)
+            raise ValueError(f'wif checksum verification failed {checksum.hex()} != {h[0:4].hex()}')
 
         key = key[1:]  # network
         key = key[:-1] if len(key) > 32 else key
@@ -91,7 +90,7 @@ class PrivateKey:
         checksum = h[0:4]
         wif = b58encode(b + checksum)
 
-        return wif.decode('utf-8')
+        return wif.decode('utf8')
 
     def to_bytes(self) -> bytes:
         return self.key.to_string()
