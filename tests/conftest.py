@@ -3,10 +3,55 @@ from os import path
 from functools import lru_cache
 from dataclasses import dataclass
 from typing import TypedDict, Literal
+
 import pytest
 
 from btclib.address import PrivateKey
 from btclib.const import AddressType, NetworkType
+
+
+def pytest_addoption(parser: pytest.Parser):
+    parser.addoption("--no-service", action="store", help='Exclude some services in test_service.py. '
+                                                          'Supports recording as: "api1,api2" / "api1 api2" / "api1, api2"')
+
+
+def pytest_configure(config: pytest.Config):
+    for line in [
+        'excluded: exclude test',
+        'uncollect_if(*, func): function to unselect test from parametrization (mark all unselected test as "excluded")'
+    ]:
+        config.addinivalue_line('markers', line)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_collectreport(report: pytest.CollectReport):
+    """Handle "uncollect_if" and "excluded" marks for report items"""
+    kept = []
+    for item in report.result:
+        if isinstance(item, pytest.Function):
+            if item.get_closest_marker('excluded'):
+                continue
+
+            if m := item.get_closest_marker('uncollect_if'):
+                func = m.kwargs['func']
+                kwargs = item.callspec.params if hasattr(item, 'callspec') else {}
+                try:
+                    r = func(item, **kwargs)
+                except TypeError as e:
+                    raise TypeError('"uncollect_if" func and test func must '
+                                    'have same parameterization arguments') from e
+                if r:
+                    item.add_marker('excluded')
+                    continue
+        kept.append(item)
+
+    report.result[:] = kept
+    yield
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]):
+    """Handle "excluded" mark for tests items"""
+    items[:] = filter(lambda x: not x.get_closest_marker('excluded'), items)
 
 
 class _pv_detail_json(TypedDict):
@@ -86,45 +131,6 @@ class iscompressed:
     
     def __bool__(self) -> bool:
         return self.bool
-
-
-def pytest_configure(config: pytest.Config):
-    for line in [
-        'excluded: exclude test',
-        'uncollect_if(*, func): function to unselect test from parametrization (mark all unselected test as "excluded")'
-    ]:
-        config.addinivalue_line('markers', line)
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_collectreport(report: pytest.CollectReport):
-    """Handle "uncollect_if" and "excluded" marks for report items"""
-    kept = []
-    for item in report.result:
-        if isinstance(item, pytest.Function):
-            if item.get_closest_marker('excluded'):
-                continue
-
-            if m := item.get_closest_marker('uncollect_if'):
-                func = m.kwargs['func']
-                kwargs = item.callspec.params if hasattr(item, 'callspec') else {}
-                try:
-                    r = func(item, **kwargs)
-                except TypeError as e:
-                    raise TypeError('"uncollect_if" func and test func must '
-                                    'have same parameterization arguments') from e
-                if r:
-                    item.add_marker('excluded')
-                    continue
-        kept.append(item)
-
-    report.result[:] = kept
-    yield
-
-
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]):
-    """Handle "excluded" mark for tests items"""
-    items[:] = filter(lambda x: not x.get_closest_marker('excluded'), items)
 
 
 @pytest.fixture(params=[NetworkType.MAIN, NetworkType.TEST], ids=lambda n: n.value)
