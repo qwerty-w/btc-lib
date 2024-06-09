@@ -1,10 +1,9 @@
-import typing
-from typing import TypedDict, Literal
-from os import path
 import json
-from dataclasses import dataclass
-import pytest
+from os import path
 from functools import lru_cache
+from dataclasses import dataclass
+from typing import TypedDict, Literal
+import pytest
 
 from btclib.address import PrivateKey
 from btclib.const import AddressType, NetworkType
@@ -30,7 +29,7 @@ class _pv_address_detail_json(TypedDict):
     hash: str
 
 
-class pvjson(typing.TypedDict):
+class pvjson(TypedDict):
     pv: _pv_detail_json
     pub: dict[Literal['hex', 'hash160'], dict[Literal['compressed', 'uncompressed'], str]]
     messages: list[_pv_msgjson]
