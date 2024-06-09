@@ -1,172 +1,217 @@
 import json
 from os import path
+from typing import TypedDict
+from functools import lru_cache
 
 import pytest
 
 from btclib import address
 from btclib.transaction import *
 from btclib.const import AddressType, NetworkType
-from tests.conftest import GetterObject
 
 
-def prepare_tx(tx):
-    instance_inps = []
-    for inp in tx.inputs:
-        inp.txid = bytes.fromhex(inp.txid)
-        inp_instance = Input(
-            inp.txid,
-            inp.vout,
-            inp.amount,
-            pv := PrivateKey.from_wif(inp.wif),
-            pv.public.get_address(AddressType[inp.type.replace('-', '_')], NetworkType.TEST)
+class inpjson(TypedDict):
+    wif: str
+    type: str
+    txid: str
+    vout: int
+    amount: int
+    script: str  # hex
+    witness: Optional[str]
+    sequence: int
+    serialized: str
+
+
+class outjson(TypedDict):
+    address: str
+    script_pub_key: str
+    amount: int
+    serialized: str
+
+
+class txjson(TypedDict):
+    inputs: list[inpjson]
+    outputs: list[outjson]
+    segwit: bool
+    fee: int
+    version: int
+    locktime: int
+    id: str
+    serialized: str
+
+
+@dataclass
+class inpobj:
+    json: inpjson
+    tx: 'txobj'
+    txindex: int
+    index: int
+
+    def __post_init__(self) -> None:
+        self.ins = Input(
+            bytes.fromhex(self.json['txid']),
+            self.json['vout'],
+            self.json['amount'],
+            pv := PrivateKey.from_wif(self.json['wif']),
+            pv.public.get_address(AddressType[self.json['type']], NetworkType.TEST),
+            self.json['sequence'],
+            Script.deserialize(self.json['script'] or b''),
+            Script.deserialize(self.json['witness'] or b'', segwit=True)
         )
-        inp_instance.custom_sign(Script.deserialize(inp.script or b''), Script.deserialize(inp.witness or b'', segwit=True))
 
-        instance_inps.append(inp_instance)
-
-    instance_outs = []
-    for out in tx.outputs:
-        instance_outs.append(Output.from_address(
-            address.from_string(out.address),
-            out.amount
-        ))
-
-    tx.set_data({'instance': Transaction(instance_inps, instance_outs, tx.version, tx.locktime)})
-    return tx
+    @classmethod
+    @lru_cache()
+    def all(cls) -> list['inpobj']:
+        return [inp for tx in txobj.all() for inp in tx.inputs]
 
 
-def get_txs():
-    with open(path.join(path.dirname(__file__), 'txs.json')) as f:
-        txs = json.load(f)
+@dataclass
+class outobj:
+    json: outjson
+    tx: 'txobj'
+    txindex: int
+    index: int
 
-    return [prepare_tx(GetterObject(tx)) for tx in txs]
+    def __post_init__(self):
+        self.ins = Output(Script.deserialize(self.json['script_pub_key']), self.json['amount'])
 
-
-@pytest.fixture(params=get_txs())
-def tx(request):
-    return request.param.copy()
-
-
-def get_prepared_inp_out(attr):
-    txs = get_txs()
-
-    prepared = []
-    for tx_index, tx in enumerate(txs):
-        for obj_index, obj in enumerate(getattr(tx, attr)):
-            obj.set_data({
-                'tx_index': tx_index,
-                'obj_index': obj_index,
-                'instance': getattr(tx.instance, attr)[obj_index]
-            })
-            prepared.append(obj)
-
-    return prepared
+    @classmethod
+    @lru_cache()
+    def all(cls) -> list['outobj']:
+        return [out for tx in txobj.all() for out in tx.outputs]
 
 
-def inp_out_id(name):
+class txobj:
+    with open(path.join(path.dirname(__file__), 'test_transactions.json')) as f:
+        loaded: list[txjson] = json.load(f)
+
+    def __init__(self, json: txjson, index: int) -> None:
+        self.json = json
+        self.index = index
+        self.inputs = [inpobj(inp, self, index, i) for i, inp in enumerate(json['inputs'])]
+        self.outputs = [outobj(out, self, index, i) for i, out in enumerate(json['outputs'])]
+        self.ins = Transaction(
+            [i.ins for i in self.inputs],
+            [o.ins for o in self.outputs],
+            json['version'],
+            json['locktime']
+        )
+    @classmethod
+    @lru_cache()
+    def all(cls) -> list['txobj']:
+        return [txobj(tx, i) for i, tx in enumerate(cls.loaded)]
+
+
+@pytest.fixture(params=txobj.all())
+def tx(request) -> txobj:
+    return request.param
+
+
+def ioid(name):
     def wrapper(item):
-        return f'tx{item.tx_index}-{name}{item.obj_index}'
-
+        return f'tx{item.txindex}-{name}{item.index}'
     return wrapper
 
 
-@pytest.fixture(params=get_prepared_inp_out('inputs'), ids=inp_out_id('inp'))
+@pytest.fixture(params=inpobj.all(), ids=ioid('inp'))
 def inp(request):
-    return request.param.copy()
+    return request.param
 
 
-@pytest.fixture(params=get_prepared_inp_out('outputs'), ids=inp_out_id('out'))
+@pytest.fixture(params=outobj.all(), ids=ioid('out'))
 def out(request):
-    return request.param.copy()
+    return request.param
 
 
-def ga_eq(ins1, ins2, at):
+def aeq(ins1, ins2, at) -> bool:  # attributes ==
     return getattr(ins1, at) == getattr(ins2, at)
 
 
-def ga_is(ins1, ins2, at):
+def ais(ins1, ins2, at) -> bool:  # attributes is
     return getattr(ins1, at) is getattr(ins2, at)
 
 
-def _test_copy(instance, eq_=(), is_=(), eq_not=(), is_not=()):
-    copied = instance.copy()
-    funcs = [
-        lambda at: ga_eq(copied, instance, at),
-        lambda at: ga_is(copied, instance, at)
+def _test_copy(ins, eq = (), is_ = (), eqnot = (), isnot = ()) -> None:
+    copied = ins.copy()
+    assert copied is not ins, f'copy is failed received object {copied} refers to the original {ins}'
+
+    fs = [
+        lambda a: getattr(ins, a) == getattr(copied, a),
+        lambda a: getattr(ins, a) is getattr(copied, a)
     ]
+    baserr = lambda a, no=False: f'attribute "{a}" of ins <{ins.__class__.__name__}> ' \
+                                                     f'doesnt ==/is to copied <{copied.__class__.__name__}>' \
+                                                     f'{" when this isn\'t expected" if no else ""}'
+    for assertion in [True, False]:
+        values = [eq, is_] if assertion else [eqnot, isnot]
 
-    assert copied is not instance
+        for f, attrs in zip(fs, values):
+            for a in attrs:
+                if assertion:
+                    assert f(a), baserr(a)
 
-    for func, attrs in zip(funcs, [eq_, is_]):
-        for attr in attrs:
-            assert func(attr)
-
-    for func, attrs in zip(funcs, [eq_not, is_not]):
-        for attr in attrs:
-            assert not func(attr)
+                else:
+                    assert not f(a), baserr(a, True)
 
 
 class TestInput:
-    def test_copy(self, inp):
-        return _test_copy(inp.instance, ['txid', 'vout', 'amount'], ['private', 'address'])
+    def test_copy(self, inp: inpobj):
+        return _test_copy(inp.ins, ['txid', 'vout', 'amount'], ['private', 'address'])
 
-    def test_serialize(self, inp):
-        assert inp.serialized == inp.instance.serialize().hex()
+    def test_serialize(self, inp: inpobj):
+        assert inp.json['serialized'] == inp.ins.serialize().hex()
 
 
 class TestOutput:
-    def test_from_script_pub_key(self, out):
-        fr = Output(out.script_pub_key, out.amount)
-        assert fr.serialize().hex() == out.serialized == out.instance.serialize().hex()
+    def test_from_address(self, out: outobj):
+        o = Output.from_address(address.from_string(out.json['address']), out.json['amount'])
+        assert out.json['serialized'] == o.serialize().hex()
 
-    def test_copy(self, out):
-        return _test_copy(out.instance, ['script_pub_key', 'amount', '_address'])
+    def test_copy(self, out: outobj):
+        return _test_copy(out.ins, ['script_pub_key', 'amount', '_address'])
 
-    def test_serialize(self, out):
-        assert out.serialized == out.instance.serialize().hex()
+    def test_serialize(self, out: outobj):
+        assert out.json['serialized'] == out.ins.serialize().hex()
 
 
 class TestTransaction:
-    def test_copy(self, tx):
-        _test_copy(tx, ['version', 'locktime'], is_not=['inputs', 'outputs'])
+    def test_copy(self, tx: txobj):
+        _test_copy(tx.ins, ['version', 'locktime'], isnot=['inputs', 'outputs'])
 
-    def test_has_segwit_input(self, tx):
-        assert all(inp.witness for inp in tx.inputs) is tx.instance.has_segwit_input()
+    def test_has_segwit_input(self, tx: txobj):
+        assert tx.json['segwit'] is tx.ins.has_segwit_input()
 
-    def test_get_id(self, tx):
-        assert tx.id == tx.instance.get_id()
+    def test_get_id(self, tx: txobj):
+        assert tx.json['id'] == tx.ins.get_id()
 
-    def test_default_sign(self, tx):
-        for instance_inp, tx_inp in zip(tx.instance.inputs, tx.inputs):
-            instance_inp.clear()
-            instance_inp.default_sign(tx.instance)
+    def test_default_sign(self, tx: txobj):
+        for inp_ins, inp_json in zip(tx.ins.inputs, tx.json['inputs']):
+            inp_ins.clear()
+            inp_ins.default_sign(tx.ins)  # type: ignore
 
             for attr in 'script', 'witness':
-                tx_inp_val = getattr(tx_inp, attr)
-                assert getattr(instance_inp, attr).serialize().hex() == ('' if tx_inp_val is None else tx_inp_val)
+                assert (inp_json.get(attr) or '') == getattr(inp_ins, attr).serialize().hex()
 
-    def test_serialize(self, tx):
-        assert tx.serialized == tx.instance.serialize().hex()
+    def test_serialize(self, tx: txobj):
+        assert tx.json['serialized'] == tx.ins.serialize().hex()
 
-    def test_deserialize(self, tx):
-        des = RawTransaction.deserialize(bytes.fromhex(tx.serialized))
+    def test_deserialize(self, tx: txobj):
+        d = RawTransaction.deserialize(bytes.fromhex(tx.json['serialized']))
 
         for attr in 'inputs', 'outputs':
-            assert len(getattr(des, attr)) == len(getattr(tx, attr))
+            assert len(getattr(d, attr)) == len(getattr(tx, attr))
 
-        for des_inp, tx_inp in zip(des.inputs, tx.inputs):
-            for attr in 'txid', 'vout':
-                assert ga_eq(des_inp, tx_inp, attr)
+        for jinp, dinp in zip(tx.json['inputs'], d.inputs):
+            assert jinp['txid'] == dinp.txid.hex()
+            assert jinp['vout'] == dinp.vout
 
             for attr in 'script', 'witness':
-                tx_inp_attr = getattr(tx_inp, attr)
-                assert getattr(des_inp, attr).serialize().hex() == '' if tx_inp_attr is None else tx_inp_attr
+                assert (jinp.get(attr) or '') == getattr(dinp, attr).serialize().hex()
 
-        for des_out, tx_out in zip(des.outputs, tx.outputs):
-            assert des_out.script_pub_key.serialize().hex() == tx_out.script_pub_key
-            assert ga_eq(des_out, tx_out, 'amount')
+        for jout, dout in zip(tx.json['outputs'], d.outputs):
+            assert jout['script_pub_key'] == dout.script_pub_key.serialize().hex()
+            assert jout['amount'] == dout.amount
 
-        for attr in 'version', 'locktime':
-            assert ga_eq(des, tx, attr)
-
-        assert des.serialize().hex() == tx.serialized
+        assert tx.json['version'] == d.version
+        assert tx.json['locktime'] == d.locktime
+        assert tx.json['serialized'] == d.serialize().hex()

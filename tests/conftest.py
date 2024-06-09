@@ -161,8 +161,8 @@ def address_type(request) -> AddressType:
 
 
 @pytest.fixture
-def address(pv: pvobj, at: AddressType) -> addrobj:
+def address(pv: pvobj, address_type: AddressType) -> addrobj:
     """
     Return prepared unit[address_type], add address instance.
     """
-    return addrobj(pv.json[at.value], at, pv)
+    return addrobj(pv.json[address_type.value], address_type, pv)
