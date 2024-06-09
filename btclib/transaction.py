@@ -511,7 +511,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             2,  # segwit flag+mark size
             len(b''.join(varint(len(inp.witness)).pack() + 
                          inp.witness.serialize(segwit=True) for inp in self.inputs))
-        ]) if self.has_segwit_input() else w
+        ]) if self.is_segwit() else w
     
     @property
     def vsize(self) -> int:
@@ -554,7 +554,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def is_coinbase(self):
         return any(isinstance(i, CoinbaseInput) for i in self.inputs)
 
-    def has_segwit_input(self) -> bool:  # todo: rename
+    def is_segwit(self) -> bool:
         return any([not inp.witness.is_empty() for inp in self.inputs])
 
     def get_id(self) -> str:
@@ -576,15 +576,15 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             inp.clear()
 
     def serialize(self, *, exclude_witnesses: bool = False) -> bytes:
-        has_segwit = False if exclude_witnesses else self.has_segwit_input()
+        segwit = not exclude_witnesses and self.is_segwit()
         return b''.join([
             self.version.pack(),
-            b'\x00\x01' if has_segwit else b'',  # segwit mark + flag
+            b'\x00\x01' if segwit else b'',  # segwit mark + flag
             varint(len(self.inputs)).pack(),
             b''.join(inp.serialize() for inp in self.inputs),
             varint(len(self.outputs)).pack(),
             b''.join(out.serialize() for out in self.outputs),
-            b''.join(varint(len(inp.witness)).pack() + inp.witness.serialize(segwit=True) for inp in self.inputs) if has_segwit else b'',
+            b''.join(varint(len(inp.witness)).pack() + inp.witness.serialize(segwit=True) for inp in self.inputs) if segwit else b'',
             self.locktime.pack()
         ])
 
