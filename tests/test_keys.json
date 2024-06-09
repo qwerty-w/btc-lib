@@ -53,7 +53,7 @@
             "script_pub_key": "76a914d11c29717053f4ec55445688f02e22e38502c44388ac",
             "hash": "d11c29717053f4ec55445688f02e22e38502c443"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "3Q5hHvG4FGwAPL5KjmN4PNqfh8348dVjSA",
                 "testnet": "2NFduMfC5rjSWb7hsQtyw1KpvuUFDsaNdWy"
@@ -142,7 +142,7 @@
             "script_pub_key": "76a914823937c77e1c185145e99a142a8d2e1dfd39342288ac",
             "hash": "823937c77e1c185145e99a142a8d2e1dfd393422"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "32GVtN3Cqk1ewQpqG1FXbc1GNDJtohZFyN",
                 "testnet": "2Msphx6yETCX19CTNw8sQDYzXaZX4eH9MhE"
@@ -216,7 +216,7 @@
             "script_pub_key": "76a9143bb15594d97fc82eac246ff49f0a6b71bcfbff7488ac",
             "hash": "3bb15594d97fc82eac246ff49f0a6b71bcfbff74"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "3B2o7UfCzAWrPCfoQLnmweWDgtYgtF5c4h",
                 "testnet": "2N2b1BDbEbd2CazJM5UQeZbVUuEkrfhrTH2"
@@ -305,7 +305,7 @@
             "script_pub_key": "76a9145f3956563cc793c714213c50bc3157649236ab4888ac",
             "hash": "5f3956563cc793c714213c50bc3157649236ab48"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "3BWXcv9bD4SyKqdfX8ziLN8FdpKQ87Y84V",
                 "testnet": "2N34jgf5cpWxKXdGDCGcaxK7WrAXZuemN6R"
@@ -379,7 +379,7 @@
             "script_pub_key": "76a91480a096c492a09170e5d26919c6dd8cc1b63e3ac788ac",
             "hash": "80a096c492a09170e5d26919c6dd8cc1b63e3ac7"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "3Dp9DQL88XXTFQtumcUgAX5p5cgTJeZG4c",
                 "testnet": "2N5NMH9G9jz2oTCXTSk6YnU55Hxtd7bZ7Lt"
@@ -453,7 +453,7 @@
             "script_pub_key": "76a914c0d4a182c93b382d2efe4870d9be4b5f13292c0a88ac",
             "hash": "c0d4a182c93b382d2efe4870d9be4b5f13292c0a"
         },
-        "P2SH-P2WPKH": {
+        "P2SH_P2WPKH": {
             "string": {
                 "mainnet": "3MewETivhCrY78szyCtCzpYXhrKgkKYm9n",
                 "testnet": "2NDD9JCexJfMtJvWYeLW5cmXnvCXrTYeKMQ"
