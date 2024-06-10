@@ -1,6 +1,6 @@
 import json
 from os import path
-from typing import TypedDict
+from typing import TypedDict, overload
 from functools import lru_cache
 
 import pytest
@@ -29,7 +29,7 @@ class outjson(TypedDict):
     serialized: str
 
 
-class txjson(TypedDict):
+class txjson(TypedDict):  # signing
     inputs: list[inpjson]
     outputs: list[outjson]
     segwit: bool
@@ -38,6 +38,15 @@ class txjson(TypedDict):
     locktime: int
     id: str
     serialized: str
+
+
+class coinbase_txjson(txjson):
+    blockheight: int
+
+
+class loadedjson(TypedDict):
+    signing: list[txjson]
+    coinbase: list[coinbase_txjson]
 
 
 @dataclass
@@ -83,7 +92,7 @@ class outobj:
 
 class txobj:
     with open(path.join(path.dirname(__file__), 'test_transactions.json')) as f:
-        loaded: list[txjson] = json.load(f)
+        loaded: loadedjson = json.load(f)
 
     def __init__(self, json: txjson, index: int) -> None:
         self.json = json
@@ -96,10 +105,11 @@ class txobj:
             json['version'],
             json['locktime']
         )
+
     @classmethod
     @lru_cache()
-    def all(cls) -> list['txobj']:
-        return [txobj(tx, i) for i, tx in enumerate(cls.loaded)]
+    def all(cls, key: str = 'signing') -> list['txobj']:
+        return [txobj(tx, i) for i, tx in enumerate(cls.loaded[key])]
 
 
 @pytest.fixture(params=txobj.all())
@@ -215,3 +225,14 @@ class TestTransaction:
         assert tx.json['version'] == d.version
         assert tx.json['locktime'] == d.locktime
         assert tx.json['serialized'] == d.serialize().hex()
+
+    def test_coinbase_serialize_deserialize(self):
+        coinbase = txobj.loaded['coinbase']
+
+        for jtx in coinbase:
+            r = RawTransaction.deserialize(bytes.fromhex(jtx['serialized']))
+            assert jtx['serialized'] == r.serialize().hex()
+            assert r.is_coinbase()
+            assert isinstance(r.inputs[0], CoinbaseInput)
+            assert jtx['blockheight'] == r.inputs[0].parse_height()
+            assert jtx['id'] == r.get_id()
