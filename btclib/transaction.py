@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, 
 
 from btclib import exceptions
 from btclib.script import Script
-from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, TypeConverter
+from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, bytes2int, TypeConverter
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
@@ -206,6 +206,13 @@ class CoinbaseInput(UnsignableInput):
             'script': self.script.serialize().hex(),
             'witness': self.witness.serialize(segwit=True).hex()
         })
+    
+    def parse_height(self) -> int:
+        """
+        Try to parse height in coinbase script, it's possible for blocks with version 2 and more (bip-0034).
+        For blocks with ver < 2 returns wrong value.
+        """
+        return bytes2int(self.script[0], 'little')
 
 
 class Input(UnsignableInput):
@@ -229,7 +236,7 @@ class Input(UnsignableInput):
     def default_sign(self, tx: 'Transaction') -> None:  # default sign
         """
         Default sign supports P2PKH, P2SH-P2WPKH, P2WPKH, P2WSH.
-        The last three use a witness (tx.get_hash4sign(segwit=True))
+        The last three use a witness (tx.get_hash4sign(segwit=True)).
         """
         try:
             index = tx.inputs.index(self)
