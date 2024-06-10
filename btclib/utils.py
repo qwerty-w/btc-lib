@@ -190,28 +190,18 @@ def r160(data: bytes) -> bytes:
     return h.digest()
 
 
-def int2bytes(value: int, byteorder: byteorder_T = 'big', *, signed: bool = False) -> bytes:
+def int2bytes(v: int, byteorder: byteorder_T = 'big', *, signed: bool = False) -> bytes:
     """
-    Uses minimum possible bytes size for integer.
+    Convert int to bytes representation with minimum possible byte size
+    :param v: value
+    :param byteorder: byteorder
+    :param signed: if signed int
     """
-    is_negative = value < 0
-    if is_negative:
-        signed = True
-
-    size = int((size := value.bit_length() / 8) + (0 if size.is_integer() else 1))  # unsigned size
-
-    if value == 0:
-        size = 1
-
     if signed:
-        # max positive/negative values with unsigned size
-        max_positive_value = int.from_bytes(b'\xff' * size, 'big') // 2
-        max_negative_value = -max_positive_value - 1
-
-        if not is_negative and value > max_positive_value or is_negative and value < max_negative_value:
-            size += 1
-
-    return value.to_bytes(size, byteorder, signed=signed)
+        blength  = (-v - 1 if v < 0 else v).bit_length() + 1  # +1 sign bit
+    else:
+        blength = v.bit_length() or 1  # 1 if v is zero
+    return v.to_bytes((blength + 7) // 8, byteorder, signed=signed)
 
 
 def bytes2int(value: bytes, byteorder: byteorder_T = 'big', *, signed: bool = False) -> int:
