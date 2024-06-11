@@ -59,7 +59,7 @@ class TypeConverter[expected_T, converted_T]:  # Descriptor
     def __get__(self, instance: Optional[Any], owner: Optional[Any]) -> 'TypeConverter' | converted_T:
         return self if instance is None else instance.__dict__[self.name]
 
-    def __set__(self, instance: Any, value: expected_T) -> None:
+    def __set__(self, instance: Any, value: expected_T | converted_T) -> None:
         if isinstance(value, self.cls) or value is None and self.optional:
             v: Optional[converted_T] = value
         elif self.converter:
