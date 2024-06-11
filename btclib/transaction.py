@@ -219,7 +219,7 @@ class CoinbaseInput(UnsignableInput):
         Try to parse height in coinbase script, it's possible for blocks with version 2 and more (bip-0034).
         For blocks with ver < 2 returns wrong value.
         """
-        return bytes2int(self.script[0], 'little')
+        return bytes2int(self.script[0], 'little')  # todo: maybe prevent indexerror?
 
 
 class Input(UnsignableInput):
