@@ -6,7 +6,7 @@ import requests
 from btclib.script import Script
 from btclib.address import Address, PrivateKey
 from btclib.const import NetworkType, DEFAULT_NETWORK, DEFAULT_SERVICE_TIMEOUT
-from btclib.transaction import Block, Unspent, RawTransaction, Transaction, BroadcastedTransaction, ioList, UnsignableInput, Input, Output
+from btclib.transaction import Block, CoinbaseInput, Unspent, RawTransaction, Transaction, BroadcastedTransaction, ioList, UnsignableInput, Input, Output
 
 
 @dataclass
@@ -168,9 +168,11 @@ class BlockchairAPI(BaseAPI):
             raise ExceededLimitError(self, r)
         return super().handle_response(r)
 
-    def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
+    def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:  # todo: maybe add get_coinbasetx() and process it (except its havent inputs)
         ins: ioList[UnsignableInput] = ioList()
-        for inp in data['inputs']:
+        if data['transaction'].get('is_coinbase'):
+            ins.append(CoinbaseInput(b'', b''))
+        for inp in data['inputs']:  # if is_coinbase inputs will be empty
             i = UnsignableInput(bytes.fromhex(inp['transaction_hash']), inp['index'], inp['value'], inp['spending_sequence'])
             i.script = Script.deserialize(inp['spending_signature_hex'])
             i.witness = Script(*inp['spending_witness'].split(','))
@@ -257,10 +259,19 @@ class BlockstreamAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['vin']:
-            i = UnsignableInput(bytes.fromhex(inp['txid']), inp['vout'], inp['prevout']['value'] if inp['prevout'] else 0, inp['sequence'])
-            i.script = Script.deserialize(inp['scriptsig'])
-            i.witness = Script(*inp.get('witness', []))
-            ins.append(i)
+            ins.append(
+                CoinbaseInput(
+                    inp['scriptsig'],
+                    Script(*inp.get('witness', []))
+                ) if inp.get('is_coinbase') else UnsignableInput(
+                    bytes.fromhex(inp['txid']),
+                    inp['vout'],
+                    inp['prevout']['value'] if inp['prevout'] else 0,
+                    inp['sequence'],
+                    Script.deserialize(inp['scriptsig']),
+                    Script(*inp.get('witness', []))
+                )
+            )
         return BroadcastedTransaction(
             ins,
             ioList(Output(out['scriptpubkey'], out['value']) for out in data['vout']),
@@ -339,11 +350,19 @@ class BlockchainAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['inputs']:
-            i = UnsignableInput(bytes.fromhex(inp['txid']), inp['output'], inp['value'], inp['sequence'])
-            i.script = Script.deserialize(inp['sigscript'])
-            i.witness = Script(*inp['witness'])
-
-            ins.append(i)
+            ins.append(
+                CoinbaseInput(
+                    inp['sigscript'],
+                    Script(*inp.get('witness', []))
+                ) if inp.get('coinbase') else UnsignableInput(
+                    bytes.fromhex(inp['txid']),
+                    inp['output'],
+                    inp['value'],
+                    inp['sequence'],
+                    Script.deserialize(inp['sigscript']),
+                    Script(*inp['witness'])
+                )
+            )
         return BroadcastedTransaction(
             ins,
             ioList(Output(out['pkscript'], out['value']) for out in data['outputs']),

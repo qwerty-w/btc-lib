@@ -198,7 +198,7 @@ class TestTransaction:
         ins = tx.ins.copy()
         for inp_ins, inp_json in zip(ins.inputs, tx.json['inputs']):
             inp_ins.clear()
-            inp_ins.default_sign(ins)  # type: ignore
+            inp_ins.default_sign(ins)  # type: ignore fixme: inp_ins type ?
 
             for attr in 'script', 'witness':
                 assert (inp_json.get(attr) or '') == getattr(inp_ins, attr).serialize().hex()
