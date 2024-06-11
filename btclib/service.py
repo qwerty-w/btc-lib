@@ -184,10 +184,19 @@ class BlockchairAPI(BaseAPI):
             self.network, data['transaction']['version'],
             data['transaction']['lock_time']
         )
+    
+    def handle_address_notfound(self, d: dict[str, typing.Any], r: requests.Response):
+        """
+        Inner method for handling address existence (not in handle_response cause api returns 200 code)
+        :param d: address data (data/<address-string>/address)
+        """
+        if not d['type'] and not d['script_hex']:
+            raise NotFoundError(self, r)
 
     def get_address(self, address: Address) -> AddressInfo:
         r = self.get('address', address=address.string)
-        d = r.json()['data'][address]['address']
+        d = r.json()['data'][address.string]['address']
+        self.handle_address_notfound(d, r)
         return AddressInfo(d['received'], d['spent'], d['transaction_count'], address)
 
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
@@ -208,6 +217,8 @@ class BlockchairAPI(BaseAPI):
             self.handle_response(r)
 
             d = r.json()['data']
+            if not d:
+                raise NotFoundError(self, r)
             txs.extend(self.process_transaction(d[tx]) for tx in cur)
         return txs
 
@@ -217,12 +228,15 @@ class BlockchairAPI(BaseAPI):
             'offset': f'{offset},0'
         }
         r = self.get('address', {'params': params}, address=address.string)
-        return self.get_transactions(r.json()['data'][address.string]['transactions'])
+        d = r.json()['data'][address.string]
+        self.handle_address_notfound(d['address'], r)
+        return self.get_transactions(d['transactions'])
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
-        r = self.get('address', {'params': { 'limit': '0,1000' }}, address=address.string)  # 0txs 1000utxo
-        d = r.json()['data'][address.string]['utxo']
-        return [Unspent(utxo['transaction_hash'], utxo['index'], utxo['value'], Block(utxo['block_id']), address) for utxo in d]
+    def get_unspent(self, address: Address, limit: int = 1000) -> list[Unspent]:
+        r = self.get('address', {'params': { 'limit': f'0,{limit}' }}, address=address.string)  # 0txs 1000utxo by default
+        d = r.json()['data'][address.string]
+        self.handle_address_notfound(d['address'], r)
+        return [Unspent(utxo['transaction_hash'], utxo['index'], utxo['value'], Block(utxo['block_id']), address) for utxo in d['utxo']]
 
     def head(self) -> Block:
         return Block(self.get('head-block').json()['context']['state'])
@@ -239,7 +253,8 @@ class BlockstreamAPI(BaseAPI):
     endpoints = {
         'address': '{uri}/address/{address}',
         'tx': '{uri}/tx/{txid}',
-        'atxs': '{address_endpoint}/txs/{type}',  # type: chain/mempool
+        'atxs': '{address_endpoint}/txs',
+        'atxs-chaintype': '{address_endpoint}/txs/{type}',  # type: chain/mempool
         'atxs-pag': '{address_endpoint}/txs/{type}/{last_seen_txid}',
         'utxo': '{address_endpoint}/utxo',
         'head-block': '{uri}/blocks/tip/height',
@@ -251,11 +266,11 @@ class BlockstreamAPI(BaseAPI):
 
     def handle_response(self, r: requests.Response) -> None:
         if r.status_code == 400:
-            if r.text == 'Too many history entries':
+            if r.text.strip() == 'Too many history entries':
                 raise ExcessiveAddress(self, r)
             raise NotFoundError(self, r)
         return super().handle_response(r)
-    
+
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         for inp in data['vin']:
@@ -289,9 +304,13 @@ class BlockstreamAPI(BaseAPI):
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
         return self.process_transaction(self.get('tx', txid=txid).json())
 
-    def get_address_transactions(self, address: Address, last_seen_txid: typing.Optional[str] = None, handle_overflow: bool = False)  -> list[BroadcastedTransaction]:
-        """Blockstream returns 50 unconfirmed (mempool) and 25 confirmed transactions. 
-           Mempool transactions can be more than 50, but Blockstream doesn't process them.
+    def get_address_transactions(self,
+                                 address: Address,
+                                 last_seen_txid: typing.Optional[str] = None,
+                                 handle_overflow: bool = False)  -> list[BroadcastedTransaction]:
+        """
+        Blockstream returns 50 unconfirmed (mempool) and 25 confirmed transactions. 
+        Mempool transactions can be more than 50, but Blockstream doesn't process them.
 
         :param handle_overflow: if true raise error if mempool transactions can be more than Blockstream returns 
         """
@@ -302,14 +321,17 @@ class BlockstreamAPI(BaseAPI):
                 type='chain',
                 last_seen_txid=last_seen_txid).json()
             ))
-        
-        mr = self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string), type='mempool', handle_response=False)
-        mempool = mr.json()
-        if len(mempool) == 50 and handle_overflow:
-            raise AddressOverflowError(self, mr)
-        self.handle_response(mr)
+        if not handle_overflow:
+            return list(map(
+                self.process_transaction,
+                self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string)).json()
+            ))
 
-        chain = self.get('atxs', address_endpoint=self.get_endpoint('address', address=address.string), type='chain').json()
+        mr = self.get('atxs-chaintype', address_endpoint=self.get_endpoint('address', address=address.string), type='mempool')
+        mempool = mr.json()
+        if len(mempool) == 50:
+            raise AddressOverflowError(self, mr)
+        chain = self.get('atxs-chaintype', address_endpoint=self.get_endpoint('address', address=address.string), type='chain').json()
         return list(map(self.process_transaction, mempool + chain))
 
     def get_unspent(self, address: Address) -> list[Unspent]:
@@ -327,7 +349,7 @@ class BlockstreamAPI(BaseAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').text)
 
-    def push(self, tx: RawTransaction) -> typing.Optional[typing.Any]:  # todo: check on BroadcastedTransaction
+    def push(self, tx: RawTransaction) -> typing.Optional[typing.Any]:
         self.post('push', session_params={'data': { self.pushing['param']: tx.serialize().hex() }})
 
 
@@ -353,7 +375,7 @@ class BlockchainAPI(BaseAPI):
             ins.append(
                 CoinbaseInput(
                     inp['sigscript'],
-                    Script(*inp.get('witness', []))
+                    Script(*inp['witness'])
                 ) if inp.get('coinbase') else UnsignableInput(
                     bytes.fromhex(inp['txid']),
                     inp['output'],
@@ -382,10 +404,15 @@ class BlockchainAPI(BaseAPI):
         return self.process_transaction(d)
 
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
-        return list(map(self.process_transaction, self.get('txs', {'params': { 'txids': ','.join(txids) }}).json()))
+        r = self.get('txs', {'params': { 'txids': ','.join(txids) }}, handle_response=False)
+        d = r.json()
+        if r.status_code == 400 and d['message'].strip() == 'Unable to parse param txids':
+            raise NotFoundError(self, r)
+        self.handle_response(r)
+        return list(map(self.process_transaction, d))
 
     def get_address_transactions(self, address: Address, length: int, offset: int = 0)  -> list[BroadcastedTransaction]:
-        params = {  # todo: check requests int params
+        params = {
             'limit': length,
             'offset': offset
         }
