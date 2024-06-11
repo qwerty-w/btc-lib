@@ -1,3 +1,4 @@
+from typing import Optional
 import pytest
 from requests import Session
 from btclib import address
@@ -12,6 +13,21 @@ transactions = [
         'network': 'mainnet',
         'id': '3c44b04ea75904e0e48492b9de685b6a3c0923a4e35fa630b5558cf8a12840f2',
         'serialized': '02000000000101f002e438b459d97db0c5e75cb73640704d17ff6d5cbd86c39cf96b420e70da2b0100000000fdffffff0200000000000000000a6a5d0714c0a23314ce06b1ea000000000000160014c51b0d2bf1818f1c948159e74bcd992a64b8ef2102483045022100e4bc629d9d57de4a798f3b3fc7ba576285b231591fb3c24edc5f0790090de8130220734600f5341c929d1fa2a5dd781315cf1f3c35416a1da72db62d0e0b86852af501210372ad5541928a1c6459fce219a83ff4006ff7ee61163358ddaea61adf54cf703f00000000'
+    }
+]
+coinbase_transactions = [
+    {
+        # genesis
+        'network': 'mainnet',
+        'id': '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+        'height': -1,  # 0
+        'serialized': '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000'
+    },
+    {
+        'network': 'mainnet',
+        'id': 'cbbcbf0d1c88924c7f01efc52b66e72f5c73e58f989d4ffe4cacd6b5b33badf3',
+        'height': 847217,
+        'serialized': '010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff580371ed0c1b4d696e656420627920416e74506f6f6c393730b9001e03207cf8fbfabe6d6d33451c7b6d84e5fd372b8505c1231a14801e58c045907e96419986b9482e987e10000000000000000000c1083829000000000000ffffffff05220200000000000017a91442402a28dd61f2718a4b27ae72a4791d5bbdade787ae5e25140000000017a9145249bdf2c131d43995cff42e8feee293f79297a8870000000000000000266a24aa21a9ed047798dde48c2de8536b9f02b14a68a1e7126baeb6de8143adbff38fdabc353a00000000000000002f6a2d434f5245012953559db5cc88ab20b1960faa9793803d0703374e3ecda72cb7961caa4b541b1e322bcfe0b5a03000000000000000002b6a2952534b424c4f434b3ae8d041e1a63c098a27e92839dbc993a3ff66df8dc4d99d09b3575e220061f62a0120000000000000000000000000000000000000000000000000000000000000000000000000'
     }
 ]
 
@@ -46,11 +62,18 @@ def transaction(request: pytest.FixtureRequest) -> BroadcastedTransaction:
     return request.param
 
 
-def uncollect_apis(get_network_f: typing.Callable[[dict[str, typing.Any]], str | NetworkType]):
+@pytest.fixture(params=coinbase_transactions)
+def coinbase_tx(request: pytest.FixtureRequest) -> BroadcastedTransaction:
+    request.param['network'] = NetworkType(request.param['network'])
+    return request.param
+
+
+def uncollect_apis(get_network_f: typing.Callable[[dict[str, typing.Any]], str | NetworkType],
+                   method_name: Optional[str] = None):
     """Exclude api if method not implemented or api doesn't support network"""
     def inner(item: pytest.Function, api: API, **kwargs):
-        method = item.originalname.replace('test_', '')
-        assert hasattr(api, method), 'uncollect_apis requires function with name like in BaseAPI methods: test_<name> == BaseAPI.<name>'
+        method = method_name or item.originalname.replace('test_', '')
+        assert hasattr(api, method), 'uncollect_apis requires function with name like in BaseAPI methods: test_<name> == BaseAPI.<name> or set method_name'
 
         network = get_network_f(kwargs)
         return not api.supports_network(NetworkType(network) if isinstance(network, str) else network) or 'BaseAPI' in getattr(api, method).__qualname__
@@ -106,3 +129,13 @@ class TestAPIs:
         h = api(network, session).head()
         assert not h.is_mempool()
         assert h > { NetworkType.MAIN: 840000, NetworkType.TEST: 2800000 }[network]  # last halving
+
+    @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['coinbase_tx']['network'], 'get_transaction'))
+    def test_coinbase_transactions(self, session: Session, api: API, coinbase_tx: dict[str, typing.Any]):
+        tx = api(coinbase_tx['network'], session, timeout=API_TIMEOUT).get_transaction(coinbase_tx['id'])
+        assert tx.is_coinbase()
+        if coinbase_tx['height'] != -1:
+            assert coinbase_tx['height'] == tx.inputs[0].parse_height()  # type: ignore fixme: tx.inputs[0] type ?
+        if api is not BlockchairAPI:
+            assert coinbase_tx['serialized'] == tx.serialize().hex()
+        
