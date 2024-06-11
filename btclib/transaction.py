@@ -195,18 +195,15 @@ class CoinbaseInput(UnsignableInput):
     DEFAULT_TXID = b'\x00' * 32
     DEFAULT_VOUT = 4294967295
     DEFAULT_SEQUENCE = 4294967295
-    DEFAULT_WITNESS = Script(b'\x00' * 32)
+    DEFAULT_WITNESS = Script(b'\x00' * 32)  # default witness for coinbase transactions after segwit (bip141)
 
     def __init__(self,
                  script: Script | str | bytes | Iterable[int],
-                 witness: Optional[Script | str | bytes | Iterable[int]] = None) -> None:
+                 witness: Script | str | bytes | Iterable[int]) -> None:
         """
         :param script: deserialized (Script)/serialized (bytes/hex/...) script
         :param witness: deserialized (Script)/serialized (bytes/hex/...) witness
         """
-        if witness is None:
-            witness = self.DEFAULT_WITNESS
-
         super().__init__(self.DEFAULT_TXID, self.DEFAULT_VOUT, 0, self.DEFAULT_SEQUENCE)
         self.script =  script if isinstance(script, Script) else Script.deserialize(script, freeze=True)
         self.witness =  witness if isinstance(witness, Script) else Script.deserialize(witness, segwit=True, freeze=True)
@@ -216,7 +213,7 @@ class CoinbaseInput(UnsignableInput):
             'script': self.script.serialize().hex(),
             'witness': self.witness.serialize(segwit=True).hex()
         })
-    
+
     def parse_height(self) -> int:
         """
         Try to parse height in coinbase script, it's possible for blocks with version 2 and more (bip-0034).
@@ -655,7 +652,7 @@ class Transaction(RawTransaction):
                 ) if not isinstance(i, CoinbaseInput) else i.copy()
                 for i, a in zip(r.inputs, amounts)
             ),
-            r.outputs,
+            r.outputs,  # fixme: .copy()
             r.version,
             r.locktime
         )
@@ -717,7 +714,7 @@ class BroadcastedTransaction(Transaction):
                 amounts: Optional[list[int]] = None) -> 'BroadcastedTransaction':
         """Convert RawTransaction/Transaction to BroadcastedTransaction"""
         if type(r) is RawTransaction:
-            assert amounts, 'for RawTransaction amounts should be specified'
+            assert amounts and len(r.inputs) == len(amounts), 'for RawTransaction amounts should be specified'
             ins = ioList(
                 UnsignableInput(
                     i.txid,
@@ -732,7 +729,7 @@ class BroadcastedTransaction(Transaction):
         else:
             ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
 
-        return cls(ins, r.outputs, block, network, r.version, r.locktime)
+        return cls(ins, r.outputs, block, network, r.version, r.locktime)  # fixme: r.outputs.copy()
 
     @classmethod
     def deserialize(cls, raw: bytes, amounts: list[int], block: int | Block, network: NetworkType = DEFAULT_NETWORK) -> 'BroadcastedTransaction':
