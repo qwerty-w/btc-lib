@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, 
 from btclib import exceptions
 from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, bytes2int, TypeConverter
-from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key
+from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key, from_string
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
@@ -54,13 +54,17 @@ class Block(int):
         return self == -1
 
 
-@dataclass
 class Unspent:
-    txid: bytes
-    vout: int
-    amount: int
-    block: Block
-    address: Address
+    txid: TypeConverter[str, bytes] = TypeConverter(bytes, bytes.fromhex)
+    block: TypeConverter[int, Block] = TypeConverter(Block)
+    address: TypeConverter[str, Address] = TypeConverter(Address, from_string)
+
+    def __init__(self, txid: str | bytes, vout: int, amount: int, block: int | Block, address: str | Address) -> None:
+        self.txid = txid
+        self.vout = vout
+        self.amount = amount
+        self.block = block
+        self.address = address
 
 
 class InputDict(TypedDict):
@@ -86,7 +90,7 @@ class TransactionDict(TypedDict):
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     """An input that doesn't have info about amount"""
 
-    txid: TypeConverter[str | bytes, bytes] = TypeConverter(bytes, bytes.fromhex)
+    txid: TypeConverter[str, bytes] = TypeConverter(bytes, bytes.fromhex)
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     sequence: TypeConverter[int, uint32] = TypeConverter(uint32)
 
