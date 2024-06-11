@@ -652,7 +652,7 @@ class Transaction(RawTransaction):
                 ) if not isinstance(i, CoinbaseInput) else i.copy()
                 for i, a in zip(r.inputs, amounts)
             ),
-            r.outputs,  # fixme: .copy()
+            r.outputs.copy(),
             r.version,
             r.locktime
         )
@@ -729,7 +729,7 @@ class BroadcastedTransaction(Transaction):
         else:
             ins: ioList[UnsignableInput] = r.inputs.copy()  # type: ignore
 
-        return cls(ins, r.outputs, block, network, r.version, r.locktime)  # fixme: r.outputs.copy()
+        return cls(ins, r.outputs.copy(), block, network, r.version, r.locktime)
 
     @classmethod
     def deserialize(cls, raw: bytes, amounts: list[int], block: int | Block, network: NetworkType = DEFAULT_NETWORK) -> 'BroadcastedTransaction':
