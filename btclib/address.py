@@ -108,7 +108,7 @@ class PublicKey:
             return cls(VerifyingKey.from_string(b, SECP256k1))
 
         if prefix not in PREFIXES['public_key']['compressed'].values():
-            raise ValueError(f'unknown compression format: {prefix.hex()} {b.hex()}')
+            raise ValueError(f'unknown compression format (prefix) "{prefix.hex()}" (0x{prefix.hex() + b.hex()})')
 
         x_coord = bytes2int(b)
         y_values: list[int] = sqrt_mod((x_coord ** 3 + 7) % P, P, all_roots=True)  # type: ignore
@@ -126,7 +126,7 @@ class PublicKey:
         sig = base64.b64decode(sig_b64.encode())
 
         if len(sig) != 65:
-            raise ValueError(f'invalid signature length: {len(sig)}')
+            raise ValueError(f'decoded signature length should equals 65, but {len(sig)} received')
 
         digest = get_magic_hash(message)
         rec_id, sig = sig[0], sig[1:]
@@ -138,7 +138,7 @@ class PublicKey:
             rec_id -= 31
 
         else:
-            raise ValueError(f'invalid recovery id: {rec_id}')
+            raise ValueError(f'recovery id should be 27 <= rec_id <= 34, but {rec_id} received')
 
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
         return cls(keys[rec_id])

@@ -28,7 +28,7 @@ class NetworkError(Exception):
         self.status_code: int = self.response.status_code
         self.request: requests.PreparedRequest = self.response.request
 
-    def __str__(self) -> str:  # todo:
+    def __str__(self) -> str:
         return f'{self.api.__class__.__name__} {self.status_code} {self.request.url}'
 
 
@@ -181,10 +181,11 @@ class BlockchairAPI(BaseAPI):
             ins,
             ioList(Output(out['script_hex'], out['value']) for out in data['outputs']),
             data['transaction']['block_id'],
-            self.network, data['transaction']['version'],
+            self.network,
+            data['transaction']['version'],
             data['transaction']['lock_time']
         )
-    
+
     def handle_address_notfound(self, d: dict[str, typing.Any], r: requests.Response):
         """
         Inner method for handling address existence (not in handle_response cause api returns 200 code)
@@ -205,7 +206,7 @@ class BlockchairAPI(BaseAPI):
         if not d:
             raise NotFoundError(self, r)
         return self.process_transaction(d[txid])
-    
+
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
         txs: list[BroadcastedTransaction] = []
         for s in range(0, len(txids), 10):  # max 10 txs per request
