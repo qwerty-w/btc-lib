@@ -526,7 +526,7 @@ class Service(BaseAPI):
     def resolve_priority(self, function: typing.Callable, priority: typing.Optional[_api_priority_T]) -> _api_priority_T:
         """Resolve and filters basepriority, self.priority and default Service.priority"""
         p: Service._api_priority_T = priority or self.priority.get(function, self.basepriority)
-        return list(filter(lambda a: a.supports_network(self.network), p))  # fixme: filter changes priority sort !
+        return list(filter(lambda a: a.supports_network(self.network), p))
 
     def call(self,
              attr: str,
