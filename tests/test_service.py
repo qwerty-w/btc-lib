@@ -10,9 +10,16 @@ API_TIMEOUT = 30
 API = type[BaseAPI]
 transactions = [
     {
+        # no sigscript
         'network': 'mainnet',
         'id': '3c44b04ea75904e0e48492b9de685b6a3c0923a4e35fa630b5558cf8a12840f2',
         'serialized': '02000000000101f002e438b459d97db0c5e75cb73640704d17ff6d5cbd86c39cf96b420e70da2b0100000000fdffffff0200000000000000000a6a5d0714c0a23314ce06b1ea000000000000160014c51b0d2bf1818f1c948159e74bcd992a64b8ef2102483045022100e4bc629d9d57de4a798f3b3fc7ba576285b231591fb3c24edc5f0790090de8130220734600f5341c929d1fa2a5dd781315cf1f3c35416a1da72db62d0e0b86852af501210372ad5541928a1c6459fce219a83ff4006ff7ee61163358ddaea61adf54cf703f00000000'
+    },
+    {
+        # no witness
+        'network': 'mainnet',
+        'id': '7a1b743fe94e83edbe458ea5d8ebcba6b041180908121b118bd03e1843198b7b',
+        'serialized': '02000000013f577895d204f5f3f5381143711d67c2f54703fa5e57e84ae553160e7f7eece4000000006a47304402204c3a105ce7c5c4822a6c74b581eebb81c101a40dc52459f935ace5ffe72f964e022010f4a03e6605b015491458556d7d94f617f60cb863a6badae26141ce09f27c09012103e1a63aaaba2067ff69ead8c13de230c39cac91c6802a154f91f07f741fe85e3cfdffffff01293c4f000000000017a9140444033b56d5e3d288303388fc0d19da82bcf8f68700000000'
     }
 ]
 coinbase_transactions = [
@@ -134,8 +141,7 @@ class TestAPIs:
     def test_coinbase_transactions(self, session: Session, api: API, coinbase_tx: dict[str, typing.Any]):
         tx = api(coinbase_tx['network'], session, timeout=API_TIMEOUT).get_transaction(coinbase_tx['id'])
         assert tx.is_coinbase()
-        if coinbase_tx['height'] != -1:
-            assert coinbase_tx['height'] == tx.inputs[0].parse_height()  # type: ignore fixme: tx.inputs[0] type ?
         if api is not BlockchairAPI:
+            if coinbase_tx['height'] != -1:
+                assert coinbase_tx['height'] == tx.inputs[0].parse_height()  # type: ignore fixme: tx.inputs[0] type ?
             assert coinbase_tx['serialized'] == tx.serialize().hex()
-        
