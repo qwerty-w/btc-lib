@@ -192,14 +192,24 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
 
 
 class CoinbaseInput(UnsignableInput):
-    def __init__(self, script: bytes, witness: bytes = b'\x00' * 32):
+    DEFAULT_TXID = b'\x00' * 32
+    DEFAULT_VOUT = 4294967295
+    DEFAULT_SEQUENCE = 4294967295
+    DEFAULT_WITNESS = Script(b'\x00' * 32)
+
+    def __init__(self,
+                 script: Script | str | bytes | Iterable[int],
+                 witness: Optional[Script | str | bytes | Iterable[int]] = None) -> None:
         """
-        :param script: Serialized script
-        :param witness: Serialized witness
+        :param script: deserialized (Script)/serialized (bytes/hex/...) script
+        :param witness: deserialized (Script)/serialized (bytes/hex/...) witness
         """
-        super().__init__(b'\x00' * 32, 4294967295, 0, 4294967295)
-        self.script = Script.deserialize(script, freeze=True)
-        self.witness = Script.deserialize(witness, segwit=True, freeze=True)
+        if witness is None:
+            witness = self.DEFAULT_WITNESS
+
+        super().__init__(self.DEFAULT_TXID, self.DEFAULT_VOUT, 0, self.DEFAULT_SEQUENCE)
+        self.script =  script if isinstance(script, Script) else Script.deserialize(script, freeze=True)
+        self.witness =  witness if isinstance(witness, Script) else Script.deserialize(witness, segwit=True, freeze=True)
 
     def __repr__(self) -> str:
         return pprint_class(self, kwargs={
