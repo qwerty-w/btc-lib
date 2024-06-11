@@ -284,10 +284,8 @@ def to_bitcoins(value: int) -> float:
 def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}) -> str:
     cls = class_or_instance if isinstance(class_or_instance, type) else type(class_or_instance)
     name = cls.__qualname__
-    all_args = ', '.join(
-        [
-            *(f'{value}' for value in args),
-            *(f'{arg}={value}' for arg, value in kwargs.items())
-        ]
-    )
+    all_args = ', '.join([
+        *(f'{value}' for value in args),
+        *(f'{arg}={value if value != '' else "''"}' for arg, value in kwargs.items())
+    ])
     return f'{name}({all_args})'
