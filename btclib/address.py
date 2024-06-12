@@ -255,9 +255,9 @@ class Address(ABC):
         return type(self).from_hash(self.hash, network)
 
 
-class DefaultAddress(Address, ABC):
+class LegacyAddress(Address, ABC):
     @classmethod
-    def from_hash(cls, hash: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'DefaultAddress':
+    def from_hash(cls, hash: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'LegacyAddress':
         return cls(cls._b58encode(hash, network).decode())
 
     @classmethod
@@ -278,14 +278,14 @@ class DefaultAddress(Address, ABC):
         return b58decode(address.encode())[1:-4]
 
 
-class P2PKH(DefaultAddress):
+class P2PKH(LegacyAddress):
     type = AddressType.P2PKH
 
     def _get_script_pub_key(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
 
 
-class P2SH(DefaultAddress):
+class P2SH(LegacyAddress):
     type = AddressType.P2SH_P2WPKH
 
     def _get_script_pub_key(self) -> Script:
@@ -364,7 +364,7 @@ def from_script_pub_key(data: Script | bytes | str, network: NetworkType = DEFAU
         0: 'OP_0'
     }
 
-    default_script_lens: dict[int, tuple[dict[int, str], type[DefaultAddress], int]] = {
+    default_script_lens: dict[int, tuple[dict[int, str], type[LegacyAddress], int]] = {
         5: (p2pkh, P2PKH, 2),
         3: (p2sh, P2SH, 1)
     }
