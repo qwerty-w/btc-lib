@@ -169,19 +169,19 @@ class TestInput:
         return _test_copy(inp.ins, ['txid', 'vout', 'amount'], ['private', 'address'])
 
     def test_serialize(self, inp: inpobj):
-        assert inp.json['serialized'] == inp.ins.serialize().hex()
+        assert inp.ins.serialize().hex() == inp.json['serialized']
 
 
 class TestOutput:
     def test_from_address(self, out: outobj):
         o = Output.from_address(address.from_string(out.json['address']), out.json['amount'])
-        assert out.json['serialized'] == o.serialize().hex()
+        assert o.serialize().hex() == out.json['serialized']
 
     def test_copy(self, out: outobj):
         return _test_copy(out.ins, ['script_pub_key', 'amount', '_address'])
 
     def test_serialize(self, out: outobj):
-        assert out.json['serialized'] == out.ins.serialize().hex()
+        assert out.ins.serialize().hex() == out.json['serialized']
 
 
 class TestTransaction:
@@ -189,10 +189,10 @@ class TestTransaction:
         _test_copy(tx.ins, ['version', 'locktime'], isnot=['inputs', 'outputs'])
 
     def test_is_segwit(self, tx: txobj):
-        assert tx.json['segwit'] is tx.ins.is_segwit()
+        assert tx.ins.is_segwit() is tx.json['segwit']
 
     def test_get_id(self, tx: txobj):
-        assert tx.json['id'] == tx.ins.get_id()
+        assert tx.ins.get_id() == tx.json['id']
 
     def test_default_sign(self, tx: txobj):
         ins = tx.ins.copy()
@@ -201,10 +201,10 @@ class TestTransaction:
             inp_ins.default_sign(ins)  # type: ignore fixme: inp_ins type ?
 
             for attr in 'script', 'witness':
-                assert (inp_json.get(attr) or '') == getattr(inp_ins, attr).serialize().hex()
+                assert getattr(inp_ins, attr).serialize().hex() == (inp_json.get(attr) or '')
 
     def test_serialize(self, tx: txobj):
-        assert tx.json['serialized'] == tx.ins.serialize().hex()
+        assert tx.ins.serialize().hex() == tx.json['serialized']
 
     def test_deserialize(self, tx: txobj):
         d = RawTransaction.deserialize(bytes.fromhex(tx.json['serialized']))
@@ -212,28 +212,30 @@ class TestTransaction:
         for attr in 'inputs', 'outputs':
             assert len(getattr(d, attr)) == len(getattr(tx, attr))
 
-        for jinp, dinp in zip(tx.json['inputs'], d.inputs):
-            assert jinp['txid'] == dinp.txid.hex()
-            assert jinp['vout'] == dinp.vout
+        for dinp, jinp in zip(d.inputs, tx.json['inputs']):
+            assert dinp.txid.hex() == jinp['txid']
+            assert dinp.vout == jinp['vout']
 
             for attr in 'script', 'witness':
-                assert (jinp.get(attr) or '') == getattr(dinp, attr).serialize().hex()
+                assert getattr(dinp, attr).serialize().hex() == (jinp.get(attr) or '')
 
-        for jout, dout in zip(tx.json['outputs'], d.outputs):
-            assert jout['script_pub_key'] == dout.script_pub_key.serialize().hex()
-            assert jout['amount'] == dout.amount
+            assert dinp.serialize().hex() == jinp['serialized']
 
-        assert tx.json['version'] == d.version
-        assert tx.json['locktime'] == d.locktime
-        assert tx.json['serialized'] == d.serialize().hex()
+        for dout, jout in zip(d.outputs, tx.json['outputs']):
+            assert dout.script_pub_key.serialize().hex() == jout['script_pub_key']
+            assert dout.amount == jout['amount']
+
+        assert d.version == tx.json['version']
+        assert d.locktime == tx.json['locktime']
+        assert d.serialize().hex() == tx.json['serialized']
 
     def test_coinbase_serialize_deserialize(self):
         coinbase = txobj.loaded['coinbase']
 
         for jtx in coinbase:
             r = RawTransaction.deserialize(bytes.fromhex(jtx['serialized']))
-            assert jtx['serialized'] == r.serialize().hex()
+            assert r.serialize().hex() == jtx['serialized']
             assert r.is_coinbase()
             assert isinstance(r.inputs[0], CoinbaseInput)
-            assert jtx['blockheight'] == r.inputs[0].parse_height()
-            assert jtx['id'] == r.get_id()
+            assert r.inputs[0].parse_height() == jtx['blockheight']
+            assert r.get_id() == jtx['id']

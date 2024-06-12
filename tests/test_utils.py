@@ -94,7 +94,7 @@ def _test_min_max_size(cls, values, level):
 
 class TestUnsignedInt:
     def test_size(self, int_cls):
-        assert int(int_cls.__name__[-2:]) == int_cls.size * 8
+        assert int_cls.size * 8 == int(int_cls.__name__[-2:])
 
     def test_min_max_size(self, int_cls, level):
         assert _test_min_max_size(
@@ -109,7 +109,7 @@ class TestUnsignedInt:
 
     def test_unpack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
-        assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
+        assert int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder) == integer
 
 
 def inc_id(item):
@@ -165,14 +165,14 @@ class TestVarInt:
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
             packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
-            assert sep + int_b == packed
+            assert packed == sep + int_b
 
     def test_pack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
             packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
 
             print('vars:', ' / '.join(str(x) for x in [sep, int_b, packed]))
-            assert sep + int_b == packed
+            assert packed == sep + int_b
 
     def test_unpack_one_bsize_separator(self, increased, byteorder):
         separators_start = 76 if not increased.bool else 253
@@ -182,7 +182,7 @@ class TestVarInt:
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
             unpacked = varint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
-            assert int.from_bytes(int_b, byteorder) == unpacked
+            assert unpacked == int.from_bytes(int_b, byteorder)
 
     def test_unpack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
@@ -197,7 +197,7 @@ class TestVarInt:
 @pytest.mark.repeat(10)
 def test_d_sha256():
     random_data = random.randbytes(64)
-    assert hashlib.sha256(hashlib.sha256(random_data).digest()).digest() == d_sha256(random_data)
+    assert d_sha256(random_data) == hashlib.sha256(hashlib.sha256(random_data).digest()).digest()
 
 
 def i2b_id(data):
@@ -213,16 +213,16 @@ def i2b_items(request, byteorder):
 
 def test_int2bytes_signed(i2b_items):
     (integer, integer_bytes), byteorder = i2b_items
-    assert integer_bytes == int2bytes(integer, byteorder, signed=True)
+    assert int2bytes(integer, byteorder, signed=True) == integer_bytes
 
 
 def test_bytes2int_signed(i2b_items):
     (integer, integer_bytes), byteorder = i2b_items
-    assert integer == bytes2int(integer_bytes, byteorder, signed=True)
+    assert bytes2int(integer_bytes, byteorder, signed=True) == integer
 
 
 def test_get_address_network_correct_data(address: addrobj, network):
-    assert network == get_address_network(address.json['string'][network.value])
+    assert get_address_network(address.json['string'][network.value]) == network
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
@@ -231,7 +231,7 @@ def test_get_address_network_incorrect_data(incorrect_address):
 
 
 def test_get_address_type(address: addrobj, network):
-    assert address.type == address.ins.type == get_address_type(address.json['string'][network.value])
+    assert get_address_type(address.json['string'][network.value]) == address.type == address.ins.type
 
 
 def test_validate_address_correct_data(address: addrobj, network):
@@ -240,8 +240,8 @@ def test_validate_address_correct_data(address: addrobj, network):
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
 def test_validate_address_incorrect_data(incorrect_address):
-    assert False is validate_address(
+    assert validate_address(
         incorrect_address,
         random.choice([AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH]),
         random.choice([NetworkType.MAIN, NetworkType.TEST])
-    )
+    ) is False
