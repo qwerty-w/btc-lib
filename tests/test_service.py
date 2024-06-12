@@ -143,5 +143,5 @@ class TestAPIs:
         assert tx.is_coinbase()
         if api is not BlockchairAPI:
             if coinbase_tx['height'] != -1:
-                assert coinbase_tx['height'] == tx.inputs[0].parse_height()  # type: ignore fixme: tx.inputs[0] type ?
-            assert coinbase_tx['serialized'] == tx.serialize().hex()
+                assert tx.inputs[0].parse_height() == coinbase_tx['height']   # type: ignore fixme: tx.inputs[0] type ?
+            assert tx.serialize().hex() == coinbase_tx['serialized']
