@@ -346,7 +346,7 @@ def from_string(address: str) -> Address:
 
     return _cls(address)
 
-def from_script_pub_key(data: Script | str, network: NetworkType = DEFAULT_NETWORK) -> Address:
+def from_script_pub_key(data: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> Address:  # fixme: data: Script | bytes
     script = data if isinstance(data, Script) else Script.deserialize(data)
     length = len(script)
 

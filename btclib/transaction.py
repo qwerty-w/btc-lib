@@ -67,22 +67,22 @@ class Unspent:
         self.address = address
 
 
-class InputDict(TypedDict):
-    txid: str
+class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.13)
+    txid: T
     vout: uint32
-    script: str
-    witness: NotRequired[str]
+    script: T
+    witness: NotRequired[T]
     sequence: uint32
 
 
-class OutputDict(TypedDict):
-    script_pub_key: str
+class OutputDict[T: str | bytes](TypedDict):
+    pkscript: T
     amount: sint64
 
 
-class TransactionDict(TypedDict):
-    inputs: list[InputDict]
-    outputs: list[OutputDict]
+class TransactionDict[T: str | bytes](TypedDict):
+    inputs: list[InputDict[T]]
+    outputs: list[OutputDict[T]]
     version: uint32
     locktime: uint32
 
@@ -146,8 +146,8 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
         return b
 
-    def as_dict(self) -> InputDict:
-        d: InputDict = {
+    def as_dict(self) -> InputDict[str]:
+        d: InputDict[str] = {
             'txid': self.txid.hex(),
             'vout': self.vout,
             'script': self.script.serialize().hex()
@@ -209,8 +209,8 @@ class CoinbaseInput(UnsignableInput):
         :param witness: deserialized (Script)/serialized (bytes/hex/...) witness
         """
         super().__init__(self.DEFAULT_TXID, self.DEFAULT_VOUT, 0, self.DEFAULT_SEQUENCE)
-        self.script =  script if isinstance(script, Script) else Script.deserialize(script, freeze=True)
-        self.witness =  witness if isinstance(witness, Script) else Script.deserialize(witness, segwit=True, freeze=True)
+        self.script = script if isinstance(script, Script) else Script.deserialize(script, freeze=True)
+        self.witness = witness if isinstance(witness, Script) else Script.deserialize(witness, segwit=True, freeze=True)
 
     def __repr__(self) -> str:
         return pprint_class(self, kwargs={
@@ -294,7 +294,7 @@ class Input(UnsignableInput):
 class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, script_pub_key: str | Script, amount: int):
+    def __init__(self, script_pub_key: Script | bytes | str, amount: int):  # fixme: script_pub_key: Script | bytes
         """
         NOTICE: Do not forget that on the bitcoin network, coins are transferred by
         scriptPubKey, not by the string (base58/bech32) representation of the address.
@@ -327,9 +327,9 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         size = varint(len(b)).pack()
         return b''.join([self.amount.pack(), size, b])
 
-    def as_dict(self) -> OutputDict:
+    def as_dict(self) -> OutputDict[str]:
         return {
-            'script_pub_key': self.script_pub_key.serialize().hex(),
+            'pkscript': self.script_pub_key.serialize().hex(),
             'amount': self.amount
         }
 
@@ -420,31 +420,30 @@ class _Hash4SignGenerator:
 
 
 class TransactionDeserializer:
-    def __init__(self, raw: bytes):
-        self.hex = raw.hex()
-        self.raw = raw
+    def __init__(self, rawbytes: bytes):
+        self.b = rawbytes
 
     def is_segwit_tx(self) -> bool:
-        return self.raw[4] == 0
+        return self.b[4] == 0
 
-    def pop(self, value: int) -> bytes:
-        if value >= 0:
-            data = self.raw[:value]
-            self.raw = self.raw[value:]
+    def pop(self, v: int) -> bytes:
+        if v >= 0:
+            data = self.b[:v]
+            self.b = self.b[v:]
 
         else:
-            data = self.raw[value:]
-            self.raw = self.raw[:value]
+            data = self.b[v:]
+            self.b = self.b[:v]
 
         return data
 
     def pop_size(self) -> int:
-        size, self.raw = varint.unpack(self.raw)
+        size, self.b = varint.unpack(self.b)
         return size
 
-    def deserialize(self) -> TransactionDict:
+    def deserialize(self) -> TransactionDict[bytes]:
         segwit = self.is_segwit_tx()
-        data: TransactionDict = {
+        data: TransactionDict[bytes] = {
             'inputs': [],
             'outputs': [],
             'version': uint32.unpack(self.pop(4)),
@@ -458,9 +457,9 @@ class TransactionDeserializer:
         inps_count = self.pop_size()
         for _ in range(inps_count):
             data['inputs'].append({
-                'txid': self.pop(32)[::-1].hex(),
+                'txid': self.pop(32)[::-1],
                 'vout': uint32.unpack(self.pop(4)),
-                'script': self.pop(self.pop_size()).hex(),
+                'script': self.pop(self.pop_size()),
                 'sequence': uint32.unpack(self.pop(4))
             })
 
@@ -469,7 +468,7 @@ class TransactionDeserializer:
         for _ in range(outs_count):
             amount = sint64.unpack(self.pop(8))
             data['outputs'].append({
-                'script_pub_key': self.pop(self.pop_size()).hex(),
+                'pkscript': self.pop(self.pop_size()),
                 'amount': amount
             })
 
@@ -477,8 +476,8 @@ class TransactionDeserializer:
         if segwit:
             for inp_index in range(inps_count):
                 items_count = self.pop_size()
-                script = Script.deserialize(self.raw, segwit=True, length=items_count)
-                data['inputs'][inp_index]['witness'] = script.serialize(segwit=True).hex()
+                script = Script.deserialize(self.b, segwit=True, length=items_count)
+                data['inputs'][inp_index]['witness'] = script.serialize(segwit=True)
 
                 # sort order
                 seq = data['inputs'][inp_index].pop('sequence')  # type: ignore
@@ -542,18 +541,18 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     @classmethod
     def deserialize(cls, raw: bytes) -> 'RawTransaction':
-        d: TransactionDict = TransactionDeserializer(raw).deserialize()
+        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize()
 
         # convert dict inputs to Input objects
         inputs = []
         for inp_dict in d['inputs']:
-            script, witness = bytes.fromhex(inp_dict['script']), bytes.fromhex(inp_dict.get('witness', ''))
-            if bytes.fromhex(inp_dict['txid']) == b'\x00' * 32:
+            script, witness = inp_dict['script'], inp_dict.get('witness', b'')
+            if inp_dict['txid'] == b'\x00' * 32:
                 inp_instance = CoinbaseInput(script, witness)
 
             else:
                 inp_instance = RawInput(
-                    bytes.fromhex(inp_dict['txid']),
+                    inp_dict['txid'],
                     inp_dict['vout'],
                     sequence=inp_dict['sequence'],
                     script=Script.deserialize(script),
@@ -565,7 +564,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         # convert dict outputs to Output objects
         outputs = []
         for out_dict in d['outputs']:
-            outputs.append(Output(out_dict['script_pub_key'], out_dict['amount']))
+            outputs.append(Output(out_dict['pkscript'], out_dict['amount']))
 
         return RawTransaction(inputs, outputs, d['version'], d['locktime'])
 
@@ -614,7 +613,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             self.locktime
         )
 
-    def as_dict(self) -> TransactionDict:
+    def as_dict(self) -> TransactionDict[str]:
         return {
             'inputs': [inp.as_dict() for inp in self.inputs],
             'outputs': [out.as_dict() for out in self.outputs],
