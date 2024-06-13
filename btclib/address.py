@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterable, Optional
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
@@ -346,7 +346,12 @@ def from_string(address: str) -> Address:
 
     return _cls(address)
 
-def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> Address:  # fixme: data: Script | bytes
+def from_pkscript(pkscript: Script | bytes | str | Iterable[int], network: NetworkType = DEFAULT_NETWORK) -> Address:
+    """
+    Get address from pkscript
+    :param pkscript: Script or serialized script bytes (or hex)
+    :param network: address network
+    """
     script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
     length = len(script)
 

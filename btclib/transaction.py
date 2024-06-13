@@ -1,10 +1,8 @@
 import json
 from abc import abstractmethod
-from dataclasses import dataclass
 from collections import OrderedDict
 from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
                    NotRequired, cast, runtime_checkable
-
 
 from btclib import exceptions
 from btclib.script import Script
@@ -94,10 +92,10 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     sequence: TypeConverter[int, uint32] = TypeConverter(uint32)
 
-    def __init__(self, txid: bytes, vout: int, sequence: int = DEFAULT_SEQUENCE,
+    def __init__(self, txid: bytes | str, vout: int, sequence: int = DEFAULT_SEQUENCE,
                  script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
         """
-        :param txid: Transaction hex.
+        :param txid: Transaction id in hex or raw bytes.
         :param vout: Unspent output index in transaction.
         :param sequence: Sequence (more in Bitcoin docs).
         """
@@ -169,7 +167,7 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
 
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, txid: bytes, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE,
+    def __init__(self, txid: bytes | str, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE,
                  script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
         """
         :param amount: Input amount
@@ -229,7 +227,7 @@ class CoinbaseInput(UnsignableInput):
 class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
 
-    def __init__(self, txid: bytes, vout: int, amount: int, private: PrivateKey,
+    def __init__(self, txid: bytes | str, vout: int, amount: int, private: PrivateKey,
                  address: Address, sequence: int = DEFAULT_SEQUENCE, script: Optional[Script] = None,
                  witness: Optional[Script] = None) -> None:
         """
@@ -292,21 +290,25 @@ class Input(UnsignableInput):
 
 
 class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
+    pkscript: TypeConverter[bytes | str | Iterable[int], Script] = TypeConverter(Script, Script.deserialize)
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, pkscript: Script | bytes | str, amount: int):  # fixme: pkscript: Script | bytes
+    def __init__(self, pkscript: Script | Address | bytes | str | Iterable[int], amount: int) -> None:
         """
         NOTICE: Do not forget that on the bitcoin network, coins are transferred by
-        scriptPubKey, not by the string (base58/bech32) representation of the address.
+        pkscript, not by the string (base58/bech32) representation of the address.
         This means that if the inputs are on the mainnet network, and as an output you
         use Output(Address("<testnet network address>")), then coins will be transferred
-        to <mainnet network address>, because they have the same scriptPubKey.
+        to <mainnet network address>, because they have the same pkscript.
+
+        :param pkscript: Pub key script/Address or serialized script in bytes/hex
+        :param amount: Output amount
         """
-        self.pkscript: Script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
+        self.pkscript = pkscript if not isinstance(pkscript, Address) else pkscript.pkscript
         self.amount = amount
         try:
-            self._address = from_pkscript(pkscript)
-        except:
+            self._address: Optional[Address] = pkscript if isinstance(pkscript, Address) else from_pkscript(pkscript)
+        except ValueError:
             self._address = None
 
     @classmethod
@@ -338,7 +340,7 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
 
 
 class EmptyOutput(Output):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(Script(), NEGATIVE_SATOSHI)
 
 
@@ -420,10 +422,13 @@ class _Hash4SignGenerator:
 
 
 class TransactionDeserializer:
-    def __init__(self, rawbytes: bytes):
-        self.b = rawbytes
+    def __init__(self, r: bytes | str) -> None:
+        """
+        :param r: Serialized transaction bytes/hex
+        """
+        self.b: bytes = bytes.fromhex(r) if isinstance(r, str) else r
 
-    def is_segwit_tx(self) -> bool:
+    def is_segwit(self) -> bool:
         return self.b[4] == 0
 
     def pop(self, v: int) -> bytes:
@@ -442,7 +447,7 @@ class TransactionDeserializer:
         return size
 
     def deserialize(self) -> TransactionDict[bytes]:
-        segwit = self.is_segwit_tx()
+        segwit = self.is_segwit()
         data: TransactionDict[bytes] = {
             'inputs': [],
             'outputs': [],
@@ -540,8 +545,12 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         return len(self.serialize())
 
     @classmethod
-    def deserialize(cls, raw: bytes) -> 'RawTransaction':
-        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize()
+    def deserialize(cls, s: bytes | str) -> 'RawTransaction':
+        """
+        Deserialize transaction
+        :param r: Serialized transaction bytes/hex
+        """
+        d: TransactionDict[bytes] = TransactionDeserializer(s).deserialize()
 
         # convert dict inputs to Input objects
         inputs = []
