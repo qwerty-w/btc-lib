@@ -55,11 +55,11 @@ class Block(int):
 
 
 class Unspent:
-    txid: TypeConverter[str, bytes] = TypeConverter(bytes, bytes.fromhex)
+    vout: TypeConverter[int, uint32] = TypeConverter(uint32)
+    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
     block: TypeConverter[int, Block] = TypeConverter(Block)
-    address: TypeConverter[str, Address] = TypeConverter(Address, from_string)
 
-    def __init__(self, txid: str | bytes, vout: int, amount: int, block: int | Block, address: str | Address) -> None:
+    def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: Address) -> None:
         self.txid = txid
         self.vout = vout
         self.amount = amount
@@ -90,7 +90,6 @@ class TransactionDict[T: str | bytes](TypedDict):
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     """An input that doesn't have info about amount"""
 
-    txid: TypeConverter[str, bytes] = TypeConverter(bytes, bytes.fromhex)
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     sequence: TypeConverter[int, uint32] = TypeConverter(uint32)
 
@@ -201,12 +200,10 @@ class CoinbaseInput(UnsignableInput):
     DEFAULT_SEQUENCE = 4294967295
     DEFAULT_WITNESS = Script(b'\x00' * 32)  # default witness for coinbase transactions after segwit (bip141)
 
-    def __init__(self,
-                 script: Script | str | bytes | Iterable[int],
-                 witness: Script | str | bytes | Iterable[int]) -> None:
+    def __init__(self, script: Script | bytes, witness: Script | bytes) -> None:
         """
-        :param script: deserialized (Script)/serialized (bytes/hex/...) script
-        :param witness: deserialized (Script)/serialized (bytes/hex/...) witness
+        :param script: Deserialized Script() or serialized bytes
+        :param witness: Deserialized Script() or serialized bytes
         """
         super().__init__(self.DEFAULT_TXID, self.DEFAULT_VOUT, 0, self.DEFAULT_SEQUENCE)
         self.script = script if isinstance(script, Script) else Script.deserialize(script, freeze=True)
@@ -294,7 +291,7 @@ class Input(UnsignableInput):
 class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, pkscript: Script | bytes | str, amount: int):  # fixme: pkscript: Script | bytes
+    def __init__(self, pkscript: Script, amount: int) -> None:
         """
         NOTICE: Do not forget that on the bitcoin network, coins are transferred by
         scriptPubKey, not by the string (base58/bech32) representation of the address.
@@ -302,7 +299,7 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         use Output(Address("<testnet network address>")), then coins will be transferred
         to <mainnet network address>, because they have the same scriptPubKey.
         """
-        self.pkscript: Script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
+        self.pkscript = pkscript
         self.amount = amount
         try:
             self._address = from_pkscript(pkscript)
@@ -564,11 +561,11 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         # convert dict outputs to Output objects
         outputs = []
         for out_dict in d['outputs']:
-            outputs.append(Output(out_dict['pkscript'], out_dict['amount']))
+            outputs.append(Output(Script.deserialize(out_dict['pkscript']), out_dict['amount']))
 
         return RawTransaction(inputs, outputs, d['version'], d['locktime'])
 
-    def is_coinbase(self):
+    def is_coinbase(self) -> bool:
         return any(isinstance(i, CoinbaseInput) for i in self.inputs)
 
     def is_segwit(self) -> bool:
