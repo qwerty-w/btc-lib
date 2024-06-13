@@ -104,6 +104,21 @@ class Script(list[bytes]):
     def unfreeze(self) -> None:
         self._frozen = None
 
+    def append(self, instance: init_T) -> None:
+        if v := validate(instance): super().append(v)
+        self.unfreeze()
+
+    def extend(self, iterable: Iterable[init_T]) -> None:
+        super().extend(validator(iterable))
+        self.unfreeze()
+    
+    def insert(self, index: SupportsIndex, instance: init_T) -> None:
+        if v := validate(instance): super().insert(index, v)
+        self.unfreeze()
+    
+    def copy(self) -> 'Script':
+        return type(self)(*self, validation=False)
+
     def serialize(self, *, segwit: bool = False) -> bytes:
         if self.is_frozen():
             return cast(bytes, self._frozen)
@@ -115,21 +130,6 @@ class Script(list[bytes]):
                 b += varint(length).pack(increased_separator=segwit)
             b += item
         return b
-
-    def append(self, instance: init_T) -> None:
-        self.unfreeze()
-        return super().append(v) if (v := validate(instance)) else None
-
-    def extend(self, iterable: Iterable[init_T]) -> None:
-        self.unfreeze()
-        return super().extend(validator(iterable))
-    
-    def insert(self, index: SupportsIndex, instance: init_T) -> None:
-        self.unfreeze()
-        return super().insert(index, v) if (v := validate(instance)) else None
-    
-    def copy(self) -> 'Script':
-        return type(self)(*self, validation=False)
 
     def __repr__(self) -> str:
         return pprint_class(self, args=[
@@ -147,9 +147,10 @@ class Script(list[bytes]):
             raise TypeError(f'can only concatenate Script (not "{type(instance).__name__}") to Script')
         return type(self)(*self, *instance)
 
-    def __iadd__(self, instance: Iterable[init_T]) -> 'Script':
+    def __iadd__(self, instance: Iterable[init_T]) -> Self:
+        rv = super().__iadd__(validator(instance))
         self.unfreeze()
-        return super().__iadd__(validator(instance))
+        return rv
 
     @overload
     def __setitem__(self, key: SupportsIndex, instance: init_T) -> None:
@@ -158,11 +159,12 @@ class Script(list[bytes]):
     def __setitem__(self, key: slice, instance: Iterable[init_T]) -> None:
         ...
     def __setitem__(self, key, instance) -> None:
-        self.unfreeze()
         match key:
             case SupportsIndex():
-                return super().__setitem__(key, v) if (v := validate(instance)) else None
+                if v := validate(instance):
+                    super().__setitem__(key, v)
             case slice():
-                return super().__setitem__(key, validator(instance))
+                super().__setitem__(key, validator(instance))
             case _:
                 raise TypeError(f'indices must be integers or slices, not {type(key).__name__}')
+        self.unfreeze()
