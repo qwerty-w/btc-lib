@@ -36,10 +36,6 @@ class InvalidWIF(InvalidError):
     msg = 'invalid WIF (checksum not verified) - {}'
 
 
-class InvalidHexOrOpcode(InvalidError):
-    msg = 'hex/opcode expected, \'{}\' received'
-
-
 class InvalidByteorder(InvalidError):
     msg = '"little"/"big" expected, {} received'
 

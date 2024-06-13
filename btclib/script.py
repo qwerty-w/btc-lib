@@ -5,42 +5,37 @@ from btclib.utils import varint, pprint_class
 from btclib import exceptions
 
 
-type InputItem = bytes | str | Iterable[int]
+# initial arguments type: can be raw bytes, string hex, string opcode or
+# iterable bytes in int representation (like bytearray, memoryview and etc)
+type init_T = bytes | str | Iterable[int]
 
 
-def validate(item: InputItem, *, opcodes: bool = True) -> Optional[bytes]:
+def validate(item: init_T, *, opcodes: bool = True) -> bytes:
     """
     :param item: bytes/hex/opcode (if opcodes)/byte array
-    :param opcodes: validate opcodes
-    :param 
+    :param opcodes: Handle opcodes
     """
     match item:
-        case str() | bytes() if not len(item):
-            return None
-
         case str() if item.startswith('OP_') and opcodes:  # opcode
             if not (v := OP_CODES.get(item)):
-                raise ValueError(f'unknown opcode \'{item}\'')
+                raise LookupError(f'unknown opcode \'{item}\'')
             return v
 
         case str():  # hex
-            assert not len(item) % 2, 'hex expected, his length multiple of two'
-            try:
-                return bytes.fromhex(item)
-            except ValueError:
-                raise exceptions.InvalidHexOrOpcode(item) from None
+            assert not len(item) % 2, 'string hex expected, his length multiple of two'
+            return bytes.fromhex(item)
 
         case bytes():
             return item
 
         case _ if isinstance(item, Iterable):
-            return bytes(item) or None  # Iterable[int] can be empty
+            return bytes(item)
 
         case _:
-            raise TypeError(f'str/bytes/Iterable[int] expected, {type(item)} received')
+            raise TypeError(f'string hex, bytes or Iterable[int] expected, but {type(item)} received')
 
 
-def validator(script: Iterable[InputItem]) -> Iterator[bytes]:
+def validator(script: Iterable[init_T]) -> Iterator[bytes]:
     for item in script:
         if not (v := validate(item)):
             continue
@@ -50,37 +45,37 @@ def validator(script: Iterable[InputItem]) -> Iterator[bytes]:
 class Script(list[bytes]):
     @overload
     def __init__(self,
-                 *data: InputItem,
-                 _validation: Literal[True] = True,
-                 _frozen: Optional[bytes] = None) -> None: ...
+                 *data: init_T,
+                 validation: Literal[True] = True,
+                 frozen: Optional[bytes] = None) -> None: ...
 
     @overload
     def __init__(self,
                  *data: bytes,
-                 _validation: Literal[False],
-                 _frozen: Optional[bytes] = None) -> None: ...
+                 validation: Literal[False],
+                 frozen: Optional[bytes] = None) -> None: ...
 
     def __init__(self,
-                 *data: InputItem | Iterable[bytes],
-                 _validation: bool = True,
-                 _frozen: Optional[bytes] = None) -> None:
-        super().__init__(validator(cast(tuple[InputItem], data)) if _validation else cast(tuple[bytes], data))
-        self._frozen = _frozen
+                 *data: init_T | bytes,
+                 validation: bool = True,
+                 frozen: Optional[bytes] = None) -> None:
+        super().__init__(validator(data) if validation else cast(tuple[bytes], data))
+        self._frozen = frozen
 
     @classmethod
-    def deserialize(cls, raw: InputItem, *, segwit: bool = False,
+    def deserialize(cls, raw: bytes | str | Iterable[int], *, segwit: bool = False,
                     length: Optional[int] = None, freeze: bool = False) -> Self:
         """
-        :param raw: hex/bytes/list of bytes
+        :param raw: Hex, bytes or list of bytes (like init_T but exclude string opcode)
         :param segwit: 
-        :param length: items count
-        :param freeze: make script frozen: script .serialize() will returns deserialized value
+        :param length: Maximum items count
+        :param freeze: Make script frozen: script .serialize() will returns deserialized value
                        until the first internal change (need for coinbase transactions in
                        which the script input can be arbitrary)
         """
         script: list[bytes] = []
         data = validate(raw, opcodes=False) or b''
-        _frozen = data if freeze else None
+        frozen = data if freeze else None
 
         count = 0
         while len(data) > 0 and (length is None or count < length):
@@ -98,13 +93,16 @@ class Script(list[bytes]):
             data = data[size:]
             count += 1
 
-        return cls(*script, _validation=False, _frozen=_frozen)
+        return cls(*script, validation=False, frozen=frozen)
 
     def is_frozen(self) -> bool:
         return self._frozen is not None
 
     def is_empty(self) -> bool:
         return not len(self)
+    
+    def unfreeze(self) -> None:
+        self._frozen = None
 
     def serialize(self, *, segwit: bool = False) -> bytes:
         if self.is_frozen():
@@ -118,20 +116,20 @@ class Script(list[bytes]):
             b += item
         return b
 
-    def append(self, instance: InputItem) -> None:
-        self._frozen = None
+    def append(self, instance: init_T) -> None:
+        self.unfreeze()
         return super().append(v) if (v := validate(instance)) else None
 
-    def extend(self, iterable: Iterable[InputItem]) -> None:
-        self._frozen = None
+    def extend(self, iterable: Iterable[init_T]) -> None:
+        self.unfreeze()
         return super().extend(validator(iterable))
     
-    def insert(self, index: SupportsIndex, instance: InputItem) -> None:
-        self._frozen = None
+    def insert(self, index: SupportsIndex, instance: init_T) -> None:
+        self.unfreeze()
         return super().insert(index, v) if (v := validate(instance)) else None
     
     def copy(self) -> 'Script':
-        return type(self)(*self, _validation=False)
+        return type(self)(*self, validation=False)
 
     def __repr__(self) -> str:
         return pprint_class(self, args=[
@@ -149,18 +147,18 @@ class Script(list[bytes]):
             raise TypeError(f'can only concatenate Script (not "{type(instance).__name__}") to Script')
         return type(self)(*self, *instance)
 
-    def __iadd__(self, instance: Iterable[InputItem]) -> 'Script':
-        self._frozen = None
+    def __iadd__(self, instance: Iterable[init_T]) -> 'Script':
+        self.unfreeze()
         return super().__iadd__(validator(instance))
 
     @overload
-    def __setitem__(self, key: SupportsIndex, instance: InputItem) -> None:
+    def __setitem__(self, key: SupportsIndex, instance: init_T) -> None:
         ...
     @overload
-    def __setitem__(self, key: slice, instance: Iterable[InputItem]) -> None:
+    def __setitem__(self, key: slice, instance: Iterable[init_T]) -> None:
         ...
     def __setitem__(self, key, instance) -> None:
-        self._frozen = None
+        self.unfreeze()
         match key:
             case SupportsIndex():
                 return super().__setitem__(key, v) if (v := validate(instance)) else None
