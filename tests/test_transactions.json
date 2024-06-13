@@ -17,19 +17,19 @@
             "outputs": [
                 {
                     "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
-                    "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
+                    "pkscript": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
                     "amount": 437719,
                     "serialized": "d7ad06000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
                 },
                 {
                     "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
-                    "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
+                    "pkscript": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
                     "amount": 437719,
                     "serialized": "d7ad0600000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
                 },
                 {
                     "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
-                    "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
+                    "pkscript": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
                     "amount": 437719,
                     "serialized": "d7ad06000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
                 }
@@ -58,20 +58,20 @@
             "outputs": [
                 {
                     "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
-                    "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
+                    "pkscript": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
                     "amount": 142573,
                     "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
                 },
                 {
                     "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
-                    "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
+                    "pkscript": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
                     "amount": 142573,
                     "serialized": "ed2c0200000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
 
                 },
                 {
                     "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
-                    "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
+                    "pkscript": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
                     "amount": 142573,
                     "serialized": "ed2c02000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
 
@@ -101,21 +101,21 @@
             "outputs": [
                 {
                     "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
-                    "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
+                    "pkscript": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
                     "amount": 142573,
                     "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
 
                 },
                 {
                     "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
-                    "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
+                    "pkscript": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
                     "amount": 142573,
                     "serialized": "ed2c02000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
 
                 },
                 {
                     "address": "tb1qjnctt83ktsfxjuhzssrs6z5fg2xzefyzeujxez8xa5ucrq24qkss4y2q49",
-                    "script_pub_key": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
+                    "pkscript": "002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1",
                     "amount": 142573,
                     "serialized": "ed2c02000000000022002094f0b59e365c126972e284070d0a89428c2ca482cf246c88e6ed3981815505a1"
 
@@ -145,21 +145,21 @@
             "outputs": [
                 {
                     "address": "mkE57wsg4vvzc5g7frV5HdEe3QVvrzYFwy",
-                    "script_pub_key": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
+                    "pkscript": "76a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac",
                     "amount": 142573,
                     "serialized": "ed2c0200000000001976a91433a741627a4e8267ef4e8abfc965fbdf1e5bc78c88ac"
 
                 },
                 {
                     "address": "2NAPFSAcfaMKFiWpkrxPEHdXi5VUXCTPJ1M",
-                    "script_pub_key": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
+                    "pkscript": "a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87",
                     "amount": 142573,
                     "serialized": "ed2c02000000000017a914bbfeac5caee50aeff79a7a94c3b6f8fd01300c6e87"
 
                 },
                 {
                     "address": "tb1qphwnxtw3agrdk0ku4ax2gkugghn86et2dwl56q",
-                    "script_pub_key": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
+                    "pkscript": "00140ddd332dd1ea06db3edcaf4ca45b8845e67d656a",
                     "amount": 142573,
                     "serialized": "ed2c0200000000001600140ddd332dd1ea06db3edcaf4ca45b8845e67d656a"
 
@@ -191,35 +191,35 @@
             "outputs": [
                 {
                     "address": "37jKPSmbEGwgfacCr2nayn1wTaqMAbA94Z",
-                    "script_pub_key": "a91442402a28dd61f2718a4b27ae72a4791d5bbdade787",
+                    "pkscript": "a91442402a28dd61f2718a4b27ae72a4791d5bbdade787",
                     "amount": 546,
                     "serialized": "220200000000000017a91442402a28dd61f2718a4b27ae72a4791d5bbdade787"
 
                 },
                 {
                     "address": "39C7fxSzEACPjM78Z7xdPxhf7mKxJwvfMJ",
-                    "script_pub_key": "a9145249bdf2c131d43995cff42e8feee293f79297a887",
+                    "pkscript": "a9145249bdf2c131d43995cff42e8feee293f79297a887",
                     "amount": 337993390,
                     "serialized": "ae5e25140000000017a9145249bdf2c131d43995cff42e8feee293f79297a887"
 
                 },
                 {
                     "address": "",
-                    "script_pub_key": "6a24aa21a9ed047798dde48c2de8536b9f02b14a68a1e7126baeb6de8143adbff38fdabc353a",
+                    "pkscript": "6a24aa21a9ed047798dde48c2de8536b9f02b14a68a1e7126baeb6de8143adbff38fdabc353a",
                     "amount": 0,
                     "serialized": "0000000000000000266a24aa21a9ed047798dde48c2de8536b9f02b14a68a1e7126baeb6de8143adbff38fdabc353a"
 
                 },
                 {
                     "address": "",
-                    "script_pub_key": "6a2d434f5245012953559db5cc88ab20b1960faa9793803d0703374e3ecda72cb7961caa4b541b1e322bcfe0b5a030",
+                    "pkscript": "6a2d434f5245012953559db5cc88ab20b1960faa9793803d0703374e3ecda72cb7961caa4b541b1e322bcfe0b5a030",
                     "amount": 0,
                     "serialized": "00000000000000002f6a2d434f5245012953559db5cc88ab20b1960faa9793803d0703374e3ecda72cb7961caa4b541b1e322bcfe0b5a030"
 
                 },
                 {
                     "address": "",
-                    "script_pub_key": "6a2952534b424c4f434b3ae8d041e1a63c098a27e92839dbc993a3ff66df8dc4d99d09b3575e220061f62a",
+                    "pkscript": "6a2952534b424c4f434b3ae8d041e1a63c098a27e92839dbc993a3ff66df8dc4d99d09b3575e220061f62a",
                     "amount": 0,
                     "serialized": "00000000000000002b6a2952534b424c4f434b3ae8d041e1a63c098a27e92839dbc993a3ff66df8dc4d99d09b3575e220061f62a"
 
