@@ -34,10 +34,10 @@ class NetworkError(Exception):
 
 # exceptions
 class ExceededLimitError(NetworkError):...
-class NotFoundError(NetworkError): ...
-class ExcessiveAddress(NetworkError): ...
+class NotFoundError(NetworkError, LookupError): ...
+class ExcessiveAddress(NetworkError, OverflowError): ...
 class ServiceUnavailableError(NetworkError): ...
-class AddressOverflowError(NetworkError): ...
+class AddressOverflowError(NetworkError, OverflowError): ...
 
 
 @dataclass
@@ -179,7 +179,7 @@ class BlockchairAPI(BaseAPI):
             ins.append(i)
         return BroadcastedTransaction(
             ins,
-            ioList(Output(out['script_hex'], out['value']) for out in data['outputs']),
+            ioList(Output(Script.deserialize(out['script_hex']), out['value']) for out in data['outputs']),
             data['transaction']['block_id'],
             self.network,
             data['transaction']['version'],
@@ -237,7 +237,7 @@ class BlockchairAPI(BaseAPI):
         r = self.get('address', {'params': { 'limit': f'0,{limit}' }}, address=address.string)  # 0txs 1000utxo by default
         d = r.json()['data'][address.string]
         self.handle_address_notfound(d['address'], r)
-        return [Unspent(utxo['transaction_hash'], utxo['index'], utxo['value'], Block(utxo['block_id']), address) for utxo in d['utxo']]
+        return [Unspent(bytes.fromhex(utxo['transaction_hash']), utxo['index'], utxo['value'], Block(utxo['block_id']), address) for utxo in d['utxo']]
 
     def head(self) -> Block:
         return Block(self.get('head-block').json()['context']['state'])
@@ -290,7 +290,7 @@ class BlockstreamAPI(BaseAPI):
             )
         return BroadcastedTransaction(
             ins,
-            ioList(Output(out['scriptpubkey'], out['value']) for out in data['vout']),
+            ioList(Output(Script.deserialize(out['scriptpubkey']), out['value']) for out in data['vout']),
             data['status'].get('block_height', -1),
             self.network,
             data['version'],
@@ -339,7 +339,7 @@ class BlockstreamAPI(BaseAPI):
         r = self.get('utxo', address_endpoint=self.get_endpoint('address', address=address.string))
         return [
             Unspent(
-                tx['txid'].encode(),
+                bytes.fromhex(tx['txid']),
                 tx['vout'],
                 tx['value'],
                 Block(tx['status']['block_height']),
@@ -388,7 +388,7 @@ class BlockchainAPI(BaseAPI):
             )
         return BroadcastedTransaction(
             ins,
-            ioList(Output(out['pkscript'], out['value']) for out in data['outputs']),
+            ioList(Output(Script.deserialize(out['pkscript']), out['value']) for out in data['outputs']),
             Block(data['block'].get('height', -1)),
             self.network,
             data['version'],
@@ -424,7 +424,7 @@ class BlockchainAPI(BaseAPI):
         d = self.get('utxo', address=address.string).json()
         return list(map(
             lambda tx: Unspent(
-                tx['txid'],
+                bytes.fromhex(tx['txid']),
                 tx['index'],
                 tx['value'],
                 Block(tx['block'].get('height', -1)),
@@ -506,7 +506,7 @@ class BitcoreAPI(BaseAPI):
         unspents = []
         while True:
             unspents.extend(Unspent(
-                tx['mintTxid'],
+                bytes.fromhex(tx['mintTxid']),
                 tx['mintIndex'],
                 tx['value'],
                 Block(tx['mintHeight']),

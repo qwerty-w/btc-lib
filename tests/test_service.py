@@ -128,6 +128,7 @@ class TestAPIs:
         address, network = addr
         un = api(network, session).get_unspent(address)
         assert all(isinstance(u, Unspent) for u in un)
+        assert all(u.txid.hex() for u in un)
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['network']))
     def test_head(self, session: Session, network: NetworkType, api: API):
