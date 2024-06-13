@@ -3,7 +3,7 @@ from .conftest import pvobj, addrobj, msgobj
 from btclib.address import *
 
 
-@pytest.fixture(params=['pub', 'hash', 'string', 'scriptPubKey'])  # address instance from hash/pub
+@pytest.fixture(params=['pub', 'hash', 'string', 'pkscript'])  # address instance from hash/pub
 def address(request, pv: pvobj, address_type: AddressType) -> addrobj:
     """
     It differs from the "address" fixture in conftest.py in that it has parameterization "from hash / pub".
@@ -23,8 +23,8 @@ def address(request, pv: pvobj, address_type: AddressType) -> addrobj:
         case 'string':
             ins = from_string(json['string'][network.value])
 
-        case 'scriptPubKey':
-            ins = from_script_pub_key(json['script_pub_key'], network)
+        case 'pkscript':
+            ins = from_pkscript(json['pkscript'], network)
 
         case _:
             raise Exception()
@@ -73,8 +73,8 @@ class TestPrivatePublicKey:
 
 
 class TestAddress:
-    def test_script_pub_key(self, address: addrobj):
-        assert address.ins.script_pub_key.serialize().hex() == address.json['script_pub_key']
+    def test_pkscript(self, address: addrobj):
+        assert address.ins.pkscript.serialize().hex() == address.json['pkscript']
 
     def test_string(self, address: addrobj, network):
         ins = address.ins.change_network(network)

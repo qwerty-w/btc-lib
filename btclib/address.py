@@ -223,7 +223,7 @@ class Address(ABC):
         self.network: NetworkType = net
 
         self.hash = self._get_hash()
-        self.script_pub_key: Script = self._get_script_pub_key()
+        self.pkscript: Script = self._get_pkscript()
 
     def __str__(self):
         return self.string
@@ -244,7 +244,7 @@ class Address(ABC):
         ...
 
     @abstractmethod
-    def _get_script_pub_key(self) -> Script:
+    def _get_pkscript(self) -> Script:
         ...
     
     def change_network(self, network: Optional[NetworkType] = None) -> 'Address':
@@ -281,14 +281,14 @@ class LegacyAddress(Address, ABC):
 class P2PKH(LegacyAddress):
     type = AddressType.P2PKH
 
-    def _get_script_pub_key(self) -> Script:
+    def _get_pkscript(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
 
 
 class P2SH(LegacyAddress):
     type = AddressType.P2SH_P2WPKH
 
-    def _get_script_pub_key(self) -> Script:
+    def _get_pkscript(self) -> Script:
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
 
 
@@ -305,7 +305,7 @@ class SegwitAddress(Address, ABC):
     def _get_hash(self) -> bytes:
         return self._bech32decode(self.string, self.network)[1]
 
-    def _get_script_pub_key(self) -> Script:
+    def _get_pkscript(self) -> Script:
         return Script('OP_0', self.hash)
 
     @staticmethod
@@ -346,8 +346,8 @@ def from_string(address: str) -> Address:
 
     return _cls(address)
 
-def from_script_pub_key(data: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> Address:  # fixme: data: Script | bytes
-    script = data if isinstance(data, Script) else Script.deserialize(data)
+def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> Address:  # fixme: data: Script | bytes
+    script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
     length = len(script)
 
     p2pkh = {
@@ -385,4 +385,4 @@ def from_script_pub_key(data: Script | bytes | str, network: NetworkType = DEFAU
         hs = script[1]
         return segwit_script_lens[len(hs)].from_hash(hs)
 
-    raise ValueError(f'unsupported address \'{data}\'')
+    raise ValueError(f'unsupported address \'{pkscript}\'')

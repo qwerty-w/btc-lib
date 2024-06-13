@@ -1,7 +1,8 @@
 import json
 from os import path
-from typing import TypedDict, overload
+from typing import TypedDict
 from functools import lru_cache
+from dataclasses import dataclass
 
 import pytest
 
@@ -24,7 +25,7 @@ class inpjson(TypedDict):
 
 class outjson(TypedDict):
     address: str
-    script_pub_key: str
+    pkscript: str
     amount: int
     serialized: str
 
@@ -82,7 +83,7 @@ class outobj:
     index: int
 
     def __post_init__(self):
-        self.ins = Output(Script.deserialize(self.json['script_pub_key']), self.json['amount'])
+        self.ins = Output(Script.deserialize(self.json['pkscript']), self.json['amount'])
 
     @classmethod
     @lru_cache()
@@ -178,7 +179,7 @@ class TestOutput:
         assert o.serialize().hex() == out.json['serialized']
 
     def test_copy(self, out: outobj):
-        return _test_copy(out.ins, ['script_pub_key', 'amount', '_address'])
+        return _test_copy(out.ins, ['pkscript', 'amount', '_address'])
 
     def test_serialize(self, out: outobj):
         assert out.ins.serialize().hex() == out.json['serialized']
@@ -222,7 +223,7 @@ class TestTransaction:
             assert dinp.serialize().hex() == jinp['serialized']
 
         for dout, jout in zip(d.outputs, tx.json['outputs']):
-            assert dout.script_pub_key.serialize().hex() == jout['script_pub_key']
+            assert dout.pkscript.serialize().hex() == jout['pkscript']
             assert dout.amount == jout['amount']
 
         assert d.version == tx.json['version']

@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, 
 from btclib import exceptions
 from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, bytes2int, TypeConverter
-from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_script_pub_key, from_string
+from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript, from_string
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
@@ -294,7 +294,7 @@ class Input(UnsignableInput):
 class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
-    def __init__(self, script_pub_key: Script | bytes | str, amount: int):  # fixme: script_pub_key: Script | bytes
+    def __init__(self, pkscript: Script | bytes | str, amount: int):  # fixme: pkscript: Script | bytes
         """
         NOTICE: Do not forget that on the bitcoin network, coins are transferred by
         scriptPubKey, not by the string (base58/bech32) representation of the address.
@@ -302,34 +302,34 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         use Output(Address("<testnet network address>")), then coins will be transferred
         to <mainnet network address>, because they have the same scriptPubKey.
         """
-        self.script_pub_key: Script = script_pub_key if isinstance(script_pub_key, Script) else Script.deserialize(script_pub_key)
+        self.pkscript: Script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
         self.amount = amount
         try:
-            self._address = from_script_pub_key(script_pub_key)
+            self._address = from_pkscript(pkscript)
         except:
             self._address = None
 
     @classmethod
     def from_address(cls, address: Address, amount: int) -> 'Output':
-        return cls(address.script_pub_key, amount)
+        return cls(address.pkscript, amount)
 
     def __repr__(self):
         return pprint_class(self, kwargs={
-            'script_pub_key': self.script_pub_key,
+            'pkscript': self.pkscript,
             'amount': self.amount
         } | ({ 'address': self._address } if self._address else {}))
 
     def copy(self) -> 'Output':
-        return Output(self.script_pub_key, self.amount)
+        return Output(self.pkscript, self.amount)
 
     def serialize(self) -> bytes:
-        b = self.script_pub_key.serialize()
+        b = self.pkscript.serialize()
         size = varint(len(b)).pack()
         return b''.join([self.amount.pack(), size, b])
 
     def as_dict(self) -> OutputDict[str]:
         return {
-            'pkscript': self.script_pub_key.serialize().hex(),
+            'pkscript': self.pkscript.serialize().hex(),
             'amount': self.amount
         }
 

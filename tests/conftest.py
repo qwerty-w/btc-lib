@@ -70,7 +70,7 @@ class _pv_msgjson(TypedDict):
 
 class _pv_address_detail_json(TypedDict):
     string: dict[Literal['mainnet', 'testnet'], str]
-    script_pub_key: str
+    pkscript: str
     hash: str
 
 
