@@ -1,15 +1,14 @@
 import json
 from abc import abstractmethod
-from dataclasses import dataclass
 from collections import OrderedDict
 from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
-                   NotRequired, cast, runtime_checkable
+                   NotRequired, cast, runtime_checkable, overload, Literal
 
 
 from btclib import exceptions
 from btclib.script import Script
 from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, bytes2int, TypeConverter
-from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript, from_string
+from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
@@ -420,7 +419,7 @@ class TransactionDeserializer:
     def __init__(self, rawbytes: bytes):
         self.b = rawbytes
 
-    def is_segwit_tx(self) -> bool:
+    def is_segwit(self) -> bool:
         return self.b[4] == 0
 
     def pop(self, v: int) -> bytes:
@@ -437,10 +436,19 @@ class TransactionDeserializer:
     def pop_size(self) -> int:
         size, self.b = varint.unpack(self.b)
         return size
+    
+    @overload
+    def deserialize(self, *, hexdecimal: Literal[True] = True) -> TransactionDict[str]: ...
 
-    def deserialize(self) -> TransactionDict[bytes]:
-        segwit = self.is_segwit_tx()
-        data: TransactionDict[bytes] = {
+    @overload
+    def deserialize(self, *, hexdecimal: Literal[False]) -> TransactionDict[bytes]: ...
+
+    def deserialize(self, *, hexdecimal: bool = True) -> TransactionDict:
+        """
+        :param hexdecimal: Return hex string
+        """
+        segwit = self.is_segwit()
+        tx: TransactionDict = {
             'inputs': [],
             'outputs': [],
             'version': uint32.unpack(self.pop(4)),
@@ -453,10 +461,10 @@ class TransactionDeserializer:
         # inputs
         inps_count = self.pop_size()
         for _ in range(inps_count):
-            data['inputs'].append({
-                'txid': self.pop(32)[::-1],
+            tx['inputs'].append({
+                'txid': self.pop(32)[::-1].hex() if hexdecimal else self.pop(32)[::-1],
                 'vout': uint32.unpack(self.pop(4)),
-                'script': self.pop(self.pop_size()),
+                'script': self.pop(self.pop_size()).hex() if hexdecimal else self.pop(self.pop_size()),
                 'sequence': uint32.unpack(self.pop(4))
             })
 
@@ -464,8 +472,8 @@ class TransactionDeserializer:
         outs_count = self.pop_size()
         for _ in range(outs_count):
             amount = sint64.unpack(self.pop(8))
-            data['outputs'].append({
-                'pkscript': self.pop(self.pop_size()),
+            tx['outputs'].append({
+                'pkscript': self.pop(self.pop_size()).hex() if hexdecimal else self.pop(self.pop_size()),
                 'amount': amount
             })
 
@@ -473,16 +481,16 @@ class TransactionDeserializer:
         if segwit:
             for inp_index in range(inps_count):
                 items_count = self.pop_size()
-                script = Script.deserialize(self.b, segwit=True, length=items_count)
-                data['inputs'][inp_index]['witness'] = script.serialize(segwit=True)
+                witness = Script.deserialize(self.b, segwit=True, length=items_count).serialize(segwit=True)
+                tx['inputs'][inp_index]['witness'] = witness.hex() if hexdecimal else witness
 
                 # sort order
-                seq = data['inputs'][inp_index].pop('sequence')  # type: ignore
-                data['inputs'][inp_index]['sequence'] = seq
+                seq = tx['inputs'][inp_index].pop('sequence')  # type: ignore
+                tx['inputs'][inp_index]['sequence'] = seq
 
-                self.pop(len(script.serialize(segwit=True)))
+                self.pop(len(witness))
 
-        return data
+        return tx
 
 
 class ioList[T: SupportsCopyAndAmount](list[T]):
@@ -538,7 +546,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     @classmethod
     def deserialize(cls, raw: bytes) -> 'RawTransaction':
-        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize()
+        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize(hexdecimal=False)
 
         # convert dict inputs to Input objects
         inputs = []
