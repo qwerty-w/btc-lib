@@ -652,7 +652,7 @@ class Transaction(RawTransaction):
     def __init__(self, inputs: Iterable[UnsignableInput], outputs: Iterable[Output],
                  version: int = DEFAULT_VERSION, locktime: int = DEFAULT_LOCKTIME) -> None:
         super().__init__(inputs, outputs, version, locktime)
-        self.inputs = inputs if isinstance(inputs, ioList) else ioList(inputs)
+        self.inputs = ioList(inputs)
 
     @property
     def fee(self) -> int:
