@@ -416,27 +416,42 @@ class _Hash4SignGenerator:
 
 
 class TransactionDeserializer:
-    def __init__(self, rawbytes: bytes):
+    def __init__(self, rawbytes: bytes) -> None:
         self.b = rawbytes
+        # start, end
+        self.s = 0
+        self.e = len(rawbytes)
 
     def is_segwit(self) -> bool:
         return self.b[4] == 0
+    
+    def seek(self, s: int = 0, e: Optional[int] = None) -> None:
+        self.s = s
+        self.e = len(self.b) if e is None else e
 
-    def pop(self, v: int) -> bytes:
-        if v >= 0:
-            data = self.b[:v]
-            self.b = self.b[v:]
+    def read(self) -> bytes:
+        return self.b[self.s:self.e]
+
+    def pop(self, size: int) -> bytes:
+        if size < 0:
+            e = self.e
+            self.e += size
+            if self.e < self.s:
+                self.e = self.s
+            return self.b[self.e:e]
 
         else:
-            data = self.b[v:]
-            self.b = self.b[:v]
+            s = self.s
+            self.s += size
+            if self.s > self.e:
+                self.s = self.e
+            return self.b[s:self.s]
 
-        return data
-
-    def pop_size(self) -> int:
-        size, self.b = varint.unpack(self.b)
+    def pop_size(self, segwit: bool = False) -> int:
+        size, b = varint.unpack(self.read(), increased_separator=segwit)
+        self.s += len(size.pack())
         return size
-    
+
     @overload
     def deserialize(self, *, hexdecimal: Literal[True] = True) -> TransactionDict[str]: ...
 
@@ -480,8 +495,8 @@ class TransactionDeserializer:
         # witnesses
         if segwit:
             for inp_index in range(inps_count):
-                items_count = self.pop_size()
-                witness = Script.deserialize(self.b, segwit=True, length=items_count).serialize(segwit=True)
+                items_count = self.pop_size(segwit=True)
+                witness = Script.deserialize(self.read(), segwit=True, length=items_count).serialize(segwit=True)
                 tx['inputs'][inp_index]['witness'] = witness.hex() if hexdecimal else witness
 
                 # sort order
@@ -490,6 +505,7 @@ class TransactionDeserializer:
 
                 self.pop(len(witness))
 
+        self.seek()
         return tx
 
 
