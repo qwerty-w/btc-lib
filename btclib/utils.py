@@ -1,14 +1,60 @@
+import json
 import hashlib
-from abc import ABC
 from decimal import Decimal
-from typing import Any, Callable, Iterable, Literal, Optional, Self, overload
 from base58check import b58decode
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Iterable, Literal, Optional, Self, \
+                   overload, Protocol, runtime_checkable, Mapping
 
 from btclib import bech32
 from btclib.const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED, AddressType, NetworkType
 
 
 byteorder_T = Literal['little', 'big']
+
+
+@runtime_checkable
+class SupportsDump(Protocol):
+    @abstractmethod
+    def as_dict(self) -> dict:
+        ...
+
+    @abstractmethod
+    def as_json(self, value: Mapping[Any, Any] | list, indent: Optional[int] = None) -> str:
+        return json.dumps(value, indent=indent)
+
+
+@runtime_checkable
+class SupportsSerialize(Protocol):
+    @abstractmethod
+    def serialize(self) -> str | bytes:
+        ...
+
+
+@runtime_checkable
+class SupportsCopy(Protocol):
+    @abstractmethod
+    def copy(self) -> Self:
+        ...
+
+
+@runtime_checkable
+class SupportsAmount(Protocol):
+    amount: int = NotImplemented
+
+
+@runtime_checkable
+class SupportsCopyAndAmount(SupportsCopy, SupportsAmount, Protocol):
+    ...
+
+
+class ioList[T: SupportsCopyAndAmount](list[T]):
+    @property
+    def amount(self) -> int:
+        return sum(x.amount for x in self)
+    
+    def copy(self) -> list[T]:
+        return ioList(i.copy() for i in self)
 
 
 class TypeConverter[expected_T, converted_T]:  # Descriptor
