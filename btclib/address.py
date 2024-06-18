@@ -16,6 +16,9 @@ from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_a
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
 
 
+UNSUPPORTED_ADDRESS = lambda v: ValueError(f"unsupported address '{v}'")
+
+
 class PrivateKey:
     def __init__(self, key: Optional[SigningKey] = None):
         self.key = key if key else SigningKey.generate(SECP256k1)
@@ -186,7 +189,7 @@ class PublicKey:
         key = cls.from_signed_message(sig_b64, message)
 
         if not (type := get_address_type(address)) or not (network := get_address_network(address)):
-            raise ValueError(f'unsupported address: {address}')
+            raise UNSUPPORTED_ADDRESS(address)
 
         return key.get_address(type, network).string == address
 
@@ -219,7 +222,7 @@ class Address(ABC):
 
         net = get_address_network(address)
         if net is None or not validate_address(self.string, self.type, net):
-            raise ValueError(f'unsupported address: {address}')
+            raise UNSUPPORTED_ADDRESS(address)
         self.network: NetworkType = net
 
         self.hash = self._get_hash()
@@ -319,7 +322,7 @@ class SegwitAddress(Address, ABC):
         ver, data = bech32.decode(PREFIXES['bech32'][network], address)
 
         if None in [ver, data]:
-            raise ValueError(f'invalid bech32 address: {address}')
+            raise ValueError(f"invalid bech32 address '{address}'")
  
         return ver, bytes(data)  # type: ignore
 
@@ -385,4 +388,4 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
         hs = script[1]
         return segwit_script_lens[len(hs)].from_hash(hs)
 
-    raise ValueError(f'unsupported address \'{pkscript}\'')
+    raise ValueError(f'unsupported pkscript \'{pkscript}\'')
