@@ -1,69 +1,14 @@
-import json
-from abc import abstractmethod
 from collections import OrderedDict
-from typing import Any, Iterable, Mapping, Optional, Protocol, Self, TypedDict, \
-                   NotRequired, cast, runtime_checkable, overload, Literal
-
+from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
 
 from btclib import exceptions
 from btclib.script import Script
-from btclib.utils import d_sha256, uint32, sint64, varint, pprint_class, bytes2int, TypeConverter
+from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
+                         ioList, TypeConverter, uint32, sint64, varint, d_sha256, bytes2int, \
+                         pprint_class
 from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
-
-
-@runtime_checkable
-class SupportsDump(Protocol):
-    @abstractmethod
-    def as_dict(self) -> dict:
-        ...
-
-    @abstractmethod
-    def as_json(self, value: Mapping[Any, Any] | list, indent: Optional[int] = None) -> str:
-        return json.dumps(value, indent=indent)
-
-
-@runtime_checkable
-class SupportsSerialize(Protocol):
-    @abstractmethod
-    def serialize(self) -> str | bytes:
-        ...
-
-
-@runtime_checkable
-class SupportsCopy(Protocol):
-    @abstractmethod
-    def copy(self) -> 'SupportsCopy':
-        ...
-
-
-@runtime_checkable
-class SupportsAmount(Protocol):
-    amount: int = NotImplemented
-
-
-@runtime_checkable
-class SupportsCopyAndAmount(SupportsCopy, SupportsAmount, Protocol):
-    ...
-
-
-class Block(int):
-    def is_mempool(self) -> bool:
-        return self == -1
-
-
-class Unspent:
-    vout: TypeConverter[int, uint32] = TypeConverter(uint32)
-    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
-    block: TypeConverter[int, Block] = TypeConverter(Block)
-
-    def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: Address) -> None:
-        self.txid = txid
-        self.vout = vout
-        self.amount = amount
-        self.block = block
-        self.address = address
 
 
 class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.13)
@@ -84,6 +29,24 @@ class TransactionDict[T: str | bytes](TypedDict):
     outputs: list[OutputDict[T]]
     version: uint32
     locktime: uint32
+
+
+class Block(int):
+    def is_mempool(self) -> bool:
+        return self == -1
+
+
+class Unspent:
+    vout: TypeConverter[int, uint32] = TypeConverter(uint32)
+    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
+    block: TypeConverter[int, Block] = TypeConverter(Block)
+
+    def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: Address) -> None:
+        self.txid = txid
+        self.vout = vout
+        self.amount = amount
+        self.block = block
+        self.address = address
 
 
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
@@ -507,15 +470,6 @@ class TransactionDeserializer:
 
         self.seek()
         return tx
-
-
-class ioList[T: SupportsCopyAndAmount](list[T]):
-    @property
-    def amount(self) -> int:
-        return sum(x.amount for x in self)
-    
-    def copy(self) -> list[T]:
-        return ioList(i.copy() for i in self)
 
 
 class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
