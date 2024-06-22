@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import requests
 
 from btclib.script import Script
-from btclib.address import Address, PrivateKey
+from btclib.address import BaseAddress, PrivateKey
 from btclib.const import NetworkType, DEFAULT_NETWORK, DEFAULT_SERVICE_TIMEOUT
 from btclib.transaction import Block, CoinbaseInput, Unspent, RawTransaction, Transaction, BroadcastedTransaction, ioList, UnsignableInput, Input, Output
 
@@ -45,7 +45,7 @@ class AddressInfo:
     received: int
     spent: int
     tx_count: int
-    address: Address
+    address: BaseAddress
 
     def __post_init__(self) -> None:
         self.balance: int = self.received - self.spent
@@ -125,7 +125,7 @@ class BaseAPI(ABC):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         raise NotImplementedError
 
-    def get_address(self, address: Address) -> AddressInfo:
+    def get_address(self, address: BaseAddress) -> AddressInfo:
         raise NotImplementedError
 
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
@@ -134,10 +134,10 @@ class BaseAPI(ABC):
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
         return list(map(self.get_transaction, txids))
 
-    def get_address_transactions(self, address: Address, *args, **kwargs) -> list[BroadcastedTransaction]:
+    def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
         raise NotImplementedError
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress) -> list[Unspent]:
         raise NotImplementedError
 
     def head(self) -> Block:
@@ -194,7 +194,7 @@ class BlockchairAPI(BaseAPI):
         if not d['type'] and not d['script_hex']:
             raise NotFoundError(self, r)
 
-    def get_address(self, address: Address) -> AddressInfo:
+    def get_address(self, address: BaseAddress) -> AddressInfo:
         r = self.get('address', address=address.string)
         d = r.json()['data'][address.string]['address']
         self.handle_address_notfound(d, r)
@@ -223,7 +223,7 @@ class BlockchairAPI(BaseAPI):
             txs.extend(self.process_transaction(d[tx]) for tx in cur)
         return txs
 
-    def get_address_transactions(self, address: Address, length: int, offset: int = 0) -> list[BroadcastedTransaction]:
+    def get_address_transactions(self, address: BaseAddress, length: int, offset: int = 0) -> list[BroadcastedTransaction]:
         params = {
             'limit': f'{length},0',
             'offset': f'{offset},0'
@@ -233,7 +233,7 @@ class BlockchairAPI(BaseAPI):
         self.handle_address_notfound(d['address'], r)
         return self.get_transactions(d['transactions'])
 
-    def get_unspent(self, address: Address, limit: int = 1000) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress, limit: int = 1000) -> list[Unspent]:
         r = self.get('address', {'params': { 'limit': f'0,{limit}' }}, address=address.string)  # 0txs 1000utxo by default
         d = r.json()['data'][address.string]
         self.handle_address_notfound(d['address'], r)
@@ -297,7 +297,7 @@ class BlockstreamAPI(BaseAPI):
             data['locktime']
         )
 
-    def get_address(self, address: Address) -> AddressInfo:
+    def get_address(self, address: BaseAddress) -> AddressInfo:
         d = self.get('address', address=address.string).json()
         _sum = lambda k: d['chain_stats'][k] + d['mempool_stats'][k]
         return AddressInfo(_sum('funded_txo_sum'), _sum('spent_txo_sum'), _sum('tx_count'), address)
@@ -306,7 +306,7 @@ class BlockstreamAPI(BaseAPI):
         return self.process_transaction(self.get('tx', txid=txid).json())
 
     def get_address_transactions(self,
-                                 address: Address,
+                                 address: BaseAddress,
                                  last_seen_txid: typing.Optional[str] = None,
                                  handle_overflow: bool = False)  -> list[BroadcastedTransaction]:
         """
@@ -335,7 +335,7 @@ class BlockstreamAPI(BaseAPI):
         chain = self.get('atxs-chaintype', address_endpoint=self.get_endpoint('address', address=address.string), type='chain').json()
         return list(map(self.process_transaction, mempool + chain))
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress) -> list[Unspent]:
         r = self.get('utxo', address_endpoint=self.get_endpoint('address', address=address.string))
         return [
             Unspent(
@@ -395,7 +395,7 @@ class BlockchainAPI(BaseAPI):
             data['locktime']
         )
 
-    def get_address(self, address: Address) -> AddressInfo:
+    def get_address(self, address: BaseAddress) -> AddressInfo:
         d = self.get('address', address=address.string).json()
         received = d['received'] - d['unconfirmed']
         return AddressInfo(received, received - d['confirmed'], d['txs'], address)
@@ -412,7 +412,7 @@ class BlockchainAPI(BaseAPI):
         self.handle_response(r)
         return list(map(self.process_transaction, d))
 
-    def get_address_transactions(self, address: Address, length: int, offset: int = 0)  -> list[BroadcastedTransaction]:
+    def get_address_transactions(self, address: BaseAddress, length: int, offset: int = 0)  -> list[BroadcastedTransaction]:
         params = {
             'limit': length,
             'offset': offset
@@ -420,7 +420,7 @@ class BlockchainAPI(BaseAPI):
         d = self.get('atxs', {'params': params}, address=address.string).json()
         return list(map(self.process_transaction, d))
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress) -> list[Unspent]:
         d = self.get('utxo', address=address.string).json()
         return list(map(
             lambda tx: Unspent(
@@ -459,7 +459,7 @@ class BlockcypherAPI(BaseAPI):
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         raise NotImplementedError
 
-    def get_address(self, address: Address) -> AddressInfo:
+    def get_address(self, address: BaseAddress) -> AddressInfo:
         raise NotImplementedError
 
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
@@ -468,10 +468,10 @@ class BlockcypherAPI(BaseAPI):
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
         return list(map(self.get_transaction, txids))
 
-    def get_address_transactions(self, address: Address, *args, **kwargs) -> list[BroadcastedTransaction]:
+    def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
         raise NotImplementedError
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress) -> list[Unspent]:
         raise NotImplementedError
 
     def head(self) -> Block:
@@ -500,7 +500,7 @@ class BitcoreAPI(BaseAPI):
         r.raise_for_status()
         return
 
-    def get_unspent(self, address: Address) -> list[Unspent]:
+    def get_unspent(self, address: BaseAddress) -> list[Unspent]:
         d = self.get('utxo', address=address.string).json()
 
         unspents = []
@@ -529,7 +529,7 @@ class BitcoreAPI(BaseAPI):
 
 class Service(BaseAPI):
     """...
-    
+
     Priority: 
     """
     type _api_priority_T = list[type[BaseAPI]]
@@ -576,7 +576,7 @@ class Service(BaseAPI):
         raise ServiceError('none of the called api provided a result', attr, p, errors)
 
     def get_address(self,
-                    address: Address,
+                    address: BaseAddress,
                     priority: typing.Optional[_api_priority_T] = None,
                     ignored_errors: typing.Optional[_network_errors_T] = None) -> AddressInfo:
         return self.call('get_address', [address], {}, priority, ignored_errors)
@@ -593,17 +593,17 @@ class Service(BaseAPI):
                          ignored_errors: typing.Optional[_network_errors_T] = None) -> list[BroadcastedTransaction]:
         return self.call('get_transactions', [txids], {}, priority, ignored_errors)
 
-    def get_address_transactions(self, address: Address, *args, **kwargs) -> list[BroadcastedTransaction]:
+    def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
         """Only BlockstreamAPI is used, pagination between services not implemented"""
         return self.call('get_address_transactions', [address], {}, [BlockstreamAPI])
 
     def get_unspent(self,
-                    address: Address,
+                    address: BaseAddress,
                     priority: typing.Optional[_api_priority_T] = None,
                     ignored_errors: typing.Optional[_network_errors_T] = None) -> list[Unspent]:
         return self.call('get_unspent', [address], {}, priority, ignored_errors)
     
-    def get_unspent_inputs(self, *args: tuple[PrivateKey, Address]) -> list[Input]:
+    def get_unspent_inputs(self, *args: tuple[PrivateKey, BaseAddress]) -> list[Input]:
         return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in self.get_unspent(address)]
 
     def head(self,
@@ -654,3 +654,11 @@ class Service(BaseAPI):
     #     push: []
     # }
     priority: dict[typing.Callable, _api_priority_T] = {}
+
+
+@dataclass
+class FeeRate:
+    ...
+
+class BitcoinFeesAPI:
+    ...

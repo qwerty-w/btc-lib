@@ -4,9 +4,9 @@ from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overl
 from btclib import exceptions
 from btclib.script import Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
-                         ioList, TypeConverter, uint32, sint64, varint, d_sha256, bytes2int, \
-                         pprint_class
-from btclib.address import Address, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
+                         ioList, TypeConverter, uint32, sint64, varint, d_sha256, op_hash160, \
+                         bytes2int, pprint_class
+from btclib.address import BaseAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
 
@@ -41,7 +41,7 @@ class Unspent:
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
     block: TypeConverter[int, Block] = TypeConverter(Block)
 
-    def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: Address) -> None:
+    def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: BaseAddress) -> None:
         self.txid = txid
         self.vout = vout
         self.amount = amount
@@ -189,8 +189,8 @@ class Input(UnsignableInput):
     """A full filled input that has both amount and PrivateKey (can be signed with .default_sign)"""
 
     def __init__(self, txid: bytes, vout: int, amount: int, private: PrivateKey,
-                 address: Address, sequence: int = DEFAULT_SEQUENCE, script: Optional[Script] = None,
-                 witness: Optional[Script] = None) -> None:
+                 address: BaseAddress, sequence: int = DEFAULT_SEQUENCE,
+                 script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
         """
         :param key: PrivateKey of the address below.
         :param address: Address that the Input belongs to.
@@ -200,7 +200,11 @@ class Input(UnsignableInput):
         self.address = address
 
     @classmethod
-    def from_unspent(cls, unspent: Unspent, private: PrivateKey, address: Address, sequence: int = DEFAULT_SEQUENCE) -> 'Input':
+    def from_unspent(cls,
+                     unspent: Unspent,
+                     private: PrivateKey,
+                     address: BaseAddress,
+                     sequence: int = DEFAULT_SEQUENCE) -> 'Input':
         return cls(unspent.txid, unspent.vout, unspent.amount, private, address, sequence)
 
     def default_sign(self, tx: 'Transaction') -> None:  # default sign
@@ -220,7 +224,8 @@ class Input(UnsignableInput):
             self.witness = Script('OP_0', sig, witness.serialize().hex())
             return
 
-        script4hash = Script('OP_DUP', 'OP_HASH160', self.private.public.get_hash160(), 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        pb_ophash160 = op_hash160(self.private.public.to_bytes())
+        script4hash = Script('OP_DUP', 'OP_HASH160', pb_ophash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
         hash4sign = tx.get_hash4sign(index, script4hash, segwit=not isinstance(self.address, P2PKH))
         sig = Script(self.private.sign_tx(hash4sign), self.private.public.to_bytes().hex())
 
@@ -232,7 +237,7 @@ class Input(UnsignableInput):
                 if self.private.public.get_address(AddressType.P2SH_P2WPKH, self.address.network).string != self.address.string:
                     raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
 
-                self.script = Script(Script('OP_0', self.private.public.get_hash160()).serialize().hex())
+                self.script = Script(Script('OP_0', pb_ophash160).serialize().hex())
                 self.witness = sig
 
             case P2WPKH():
@@ -254,13 +259,6 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
 
     def __init__(self, pkscript: Script, amount: int) -> None:
-        """
-        NOTICE: Do not forget that on the bitcoin network, coins are transferred by
-        scriptPubKey, not by the string (base58/bech32) representation of the address.
-        This means that if the inputs are on the mainnet network, and as an output you
-        use Output(Address("<testnet network address>")), then coins will be transferred
-        to <mainnet network address>, because they have the same scriptPubKey.
-        """
         self.pkscript = pkscript
         self.amount = amount
         try:
@@ -269,7 +267,7 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
             self._address = None
 
     @classmethod
-    def from_address(cls, address: Address, amount: int) -> 'Output':
+    def from_address(cls, address: BaseAddress, amount: int) -> 'Output':
         return cls(address.pkscript, amount)
 
     def __repr__(self):

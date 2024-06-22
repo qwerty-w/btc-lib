@@ -222,18 +222,22 @@ class varint(int):
         return separator + self.to_bytes(int_size, byteorder)
 
 
-def sha256(data: bytes) -> bytes:
-    return hashlib.sha256(data).digest()
-
-
-def d_sha256(data: bytes) -> bytes:  # double sha256
-    return sha256(sha256(data))
-
-
-def r160(data: bytes) -> bytes:
+def r160(d: bytes) -> bytes:
     h = hashlib.new('ripemd160')
-    h.update(data)
+    h.update(d)
     return h.digest()
+
+
+def sha256(d: bytes) -> bytes:
+    return hashlib.sha256(d).digest()
+
+
+def d_sha256(d: bytes) -> bytes:  # double sha256
+    return sha256(sha256(d))
+
+
+def op_hash160(d: bytes):
+    return r160(sha256(d))
 
 
 def int2bytes(v: int, byteorder: byteorder_T = 'big', *, signed: bool = False) -> bytes:

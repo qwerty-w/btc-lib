@@ -89,16 +89,16 @@ def uncollect_apis(get_network_f: typing.Callable[[dict[str, typing.Any]], str |
 
 
 @pytest.fixture(params=[
-    (address.P2WPKH('bc1q7wn3nmhnvsr0q2gg8nnntga9u93ycl3nj6nf0h'), NetworkType.MAIN),
-    (address.P2SH('2N1rjhumXA3ephUQTDMfGhufxGQPZuZUTMk'), NetworkType.TEST)
+    (address.P2WPKH.from_string('bc1q7wn3nmhnvsr0q2gg8nnntga9u93ycl3nj6nf0h'), NetworkType.MAIN),
+    (address.P2SH.from_string('2N1rjhumXA3ephUQTDMfGhufxGQPZuZUTMk'), NetworkType.TEST)
 ])
-def addr(request: pytest.FixtureRequest) -> tuple[Address, NetworkType]:
+def addr(request: pytest.FixtureRequest) -> tuple[BaseAddress, NetworkType]:
     return request.param
 
 
 class TestAPIs:
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+    def test_get_address(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
         address, network = addr
         inf = api(network, session).get_address(address)
         assert isinstance(inf, AddressInfo)
@@ -115,7 +115,7 @@ class TestAPIs:
         assert all(map(lambda tx: tx.serialize().hex() == transaction['serialized'], txs))
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address_transactions(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+    def test_get_address_transactions(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
         address, network = addr
         f = api(network, session, timeout=API_TIMEOUT).get_address_transactions
         k = {'length': 10} if 'length' in f.__code__.co_varnames else {}
@@ -124,7 +124,7 @@ class TestAPIs:
         assert all(isinstance(tx, BroadcastedTransaction) for tx in txs)
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_unspent(self, session: Session, addr: tuple[Address, NetworkType], api: API):
+    def test_get_unspent(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
         address, network = addr
         un = api(network, session).get_unspent(address)
         assert all(isinstance(u, Unspent) for u in un)
