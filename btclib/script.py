@@ -2,7 +2,6 @@ from typing import cast, overload, Self, Literal, Iterable, Iterator, Optional, 
 
 from btclib.const import OP_CODES, CODE_OPS
 from btclib.utils import varint, pprint_class
-from btclib import exceptions
 
 
 # initial arguments type: can be raw bytes, string hex, string opcode or

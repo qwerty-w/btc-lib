@@ -9,14 +9,10 @@ from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
 from btclib import bech32
-from btclib import exceptions
 from btclib.script import Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
-from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_address, \
+from btclib.utils import sha256, d_sha256, get_address_network, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
-
-
-UNSUPPORTED_ADDRESS = lambda v: ValueError(f"unsupported address '{v}'")
 
 
 class PrivateKey:
@@ -193,7 +189,7 @@ class PublicKey:
         key = cls.from_signed_message(sig_b64, message)
 
         if not (type := get_address_type(address)) or not (network := get_address_network(address)):
-            raise UNSUPPORTED_ADDRESS(address)
+            raise ValueError(f"unsupported address '{address}'")
 
         return key.get_address(type, network).string == address
 
@@ -330,7 +326,7 @@ class P2WSH(SegwitAddress):
 
 
 def from_string(address: str) -> BaseAddress:
-    type, network = get_address_type(address), get_address_network(address)
+    type = get_address_type(address)
     cls = {
         AddressType.P2PKH: P2PKH,
         AddressType.P2SH_P2WPKH: P2SH,
@@ -340,7 +336,7 @@ def from_string(address: str) -> BaseAddress:
     assert cls, f"unsupported address '{address}'"
     return cls.from_string(address)
 
-def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> BaseAddress:  # fixme: data: Script | bytes
+def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> BaseAddress:
     script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
     length = len(script)
 
