@@ -126,7 +126,7 @@ class PublicKey:
 
     @classmethod
     def from_signed_message(cls, sig_b64: str, message: str) -> 'PublicKey':
-        sig = base64.b64decode(sig_b64.encode())
+        sig = base64.b64decode(sig_b64.encode('utf8'))
 
         if len(sig) != 65:
             raise ValueError(f'decoded signature length should equals 65, but {len(sig)} received')
@@ -201,7 +201,7 @@ class PublicKey:
         magic_hash = get_magic_hash(message)
         try:
             return self.key.verify_digest(
-                base64.b64decode(sig_b64.encode())[1:],
+                base64.b64decode(sig_b64.encode('utf8'))[1:],
                 magic_hash,
                 sigdecode=sigdecode_string
             )
@@ -260,7 +260,7 @@ class BaseAddress(ABC):
 class LegacyAddress(BaseAddress, ABC):
     @classmethod
     def from_string(cls, string: str) -> 'LegacyAddress':
-        d = b58decode(string.encode())
+        d = b58decode(string.encode('utf8'))
         # prefix, hash, checksum
         p, h, cs = d[:1], d[1:-4], d[-4:]
         assert p in PREFIXES['legacy_reversed'], "unknown prefix '{p}'"
