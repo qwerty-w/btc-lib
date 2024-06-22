@@ -76,6 +76,12 @@ PREFIXES = {
             'odd': b'\x03'
         },
         'uncompressed': b'\x04'
+    },
+    'legacy_reversed': {
+        b'\x00': (AddressType.P2PKH, NetworkType.MAIN),
+        b'\x6f': (AddressType.P2PKH, NetworkType.TEST),
+        b'\x05': (AddressType.P2SH_P2WPKH, NetworkType.MAIN),
+        b'\xc4': (AddressType.P2SH_P2WPKH, NetworkType.TEST)
     }
 }
 

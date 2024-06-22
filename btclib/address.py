@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, cast
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
@@ -13,7 +13,7 @@ from btclib import exceptions
 from btclib.script import Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
 from btclib.utils import sha256, r160, d_sha256, get_address_network, validate_address, \
-    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
+    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
 
 
 UNSUPPORTED_ADDRESS = lambda v: ValueError(f"unsupported address '{v}'")
@@ -146,28 +146,32 @@ class PublicKey:
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
         return cls(keys[rec_id])
 
-    def get_hash160(self, *, compressed: bool = True) -> bytes:
-        return r160(sha256(self.to_bytes(compressed=compressed)))
+    def get_address(self, type: AddressType, network: NetworkType = DEFAULT_NETWORK) -> 'BaseAddress':
+        cls = {
+            AddressType.P2PKH: P2PKH,
+            AddressType.P2SH_P2WPKH: P2SH,
+            AddressType.P2WPKH: P2WPKH,
+            AddressType.P2WSH: P2WSH
+        }.get(type)
+        assert cls, f"unknown address type '{type}'"
 
-    def get_address(self, type: AddressType, network: NetworkType = DEFAULT_NETWORK) -> 'Address':
         match type:
             case AddressType.P2PKH | AddressType.P2WPKH:
-                _cls = { AddressType.P2PKH: P2PKH, AddressType.P2WPKH: P2WPKH }[type]
-                h = self.get_hash160()
+                return {
+                    AddressType.P2PKH: P2PKH,
+                    AddressType.P2WPKH: P2WPKH
+                }[type].from_pubkey(self, network=network)
 
             case AddressType.P2SH_P2WPKH:
-                _cls = P2SH
-                h = r160(sha256(Script('OP_0', self.get_hash160()).serialize()))
+                script = Script('OP_0', op_hash160(self.to_bytes()))
+                return P2SH(op_hash160(script.serialize()), network)
 
             case AddressType.P2WSH:
-                _cls = P2WSH
-                witness_script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG').serialize()
-                h = sha256(witness_script)
+                script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG')
+                return P2WSH(sha256(script.serialize()), network=network)
 
             case _:
-                raise ValueError(f'invalid address type: {type}')
-
-        return _cls.from_hash(h, network)
+                raise TypeError(f"unknown address type '{type}'")
 
     @classmethod
     def verify_message_for_address(cls, sig_b64: str, message: str, address: str) -> bool:
@@ -214,142 +218,129 @@ class PublicKey:
         return prefix + b[:32]
 
 
-class Address(ABC):
+class BaseAddress(ABC):
     type: AddressType = NotImplemented
 
-    def __init__(self, address: str):
-        self.string = address
+    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK):
+        self.hash = hash
+        self.network = network
+        self.pkscript = self._to_pkscript()
+        self.string = self._to_string()
 
-        net = get_address_network(address)
-        if net is None or not validate_address(self.string, self.type, net):
-            raise UNSUPPORTED_ADDRESS(address)
-        self.network: NetworkType = net
+    @classmethod
+    @abstractmethod
+    def from_string(cls, string: str) -> 'BaseAddress':
+        ...
 
-        self.hash = self._get_hash()
-        self.pkscript: Script = self._get_pkscript()
+    def change_network(self, network: Optional[NetworkType] = None) -> 'BaseAddress':
+        if network == self.network:
+            return self
 
+        network = network if network else self.network.toggle()
+        return type(self)(self.hash, network=network)
+
+    @abstractmethod
+    def _to_pkscript(self) -> Script:
+        ...
+
+    @abstractmethod
+    def _to_string(self) -> str:
+        ...
+    
     def __str__(self):
         return self.string
 
     def __repr__(self):
         return pprint_class(self, [self.__str__().__repr__()])
 
-    def __eq__(self, other: 'Address'):
-        return str(self) == str(other) if isinstance(other, Address) else NotImplemented
+    def __eq__(self, other: 'BaseAddress'):
+        return str(self) == str(other) if isinstance(other, BaseAddress) else NotImplemented
 
+
+class LegacyAddress(BaseAddress, ABC):
     @classmethod
-    @abstractmethod
-    def from_hash(cls, hash: bytes, network: NetworkType, **kwargs) -> 'Address':
-        ...
+    def from_string(cls, string: str) -> 'LegacyAddress':
+        d = b58decode(string.encode())
+        # prefix, hash, checksum
+        p, h, cs = d[:1], d[1:-4], d[-4:]
+        assert p in PREFIXES['legacy_reversed'], "unknown prefix '{p}'"
+        type, network = PREFIXES['legacy_reversed'][p]
+        assert d_sha256(p + h)[:4] == cs, f"address '{string}' checksum verification failed"
+        assert type == cls.type
+        return cls(h, network)
 
-    @abstractmethod
-    def _get_hash(self) -> bytes:
-        ...
-
-    @abstractmethod
-    def _get_pkscript(self) -> Script:
-        ...
-    
-    def change_network(self, network: Optional[NetworkType] = None) -> 'Address':
-        if network == self.network:
-            return self
-
-        network = network if network else self.network.toggle()
-        return type(self).from_hash(self.hash, network)
-
-
-class LegacyAddress(Address, ABC):
-    @classmethod
-    def from_hash(cls, hash: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'LegacyAddress':
-        return cls(cls._b58encode(hash, network).decode())
-
-    @classmethod
-    def _get_prefix(cls, network: NetworkType) -> bytes:
-        return PREFIXES[cls.type][network]
-
-    def _get_hash(self) -> bytes:
-        return self._b58decode(self.string)
-
-    @classmethod
-    def _b58encode(cls, data: bytes, network: NetworkType) -> bytes:
-        raw_address_bytes = cls._get_prefix(network) + data
-        raw_address_hash = d_sha256(raw_address_bytes)
-        return b58encode(raw_address_bytes + raw_address_hash[0:4])
-
-    @staticmethod
-    def _b58decode(address: str) -> bytes:
-        return b58decode(address.encode())[1:-4]
+    def _to_string(self) -> str:
+        b = PREFIXES[self.type][self.network] + self.hash
+        cs = d_sha256(b)[:4]
+        return b58encode(b + cs).decode('utf8')
 
 
 class P2PKH(LegacyAddress):
     type = AddressType.P2PKH
 
-    def _get_pkscript(self) -> Script:
+    @classmethod
+    def from_pubkey(cls, key: PublicKey, network: NetworkType = DEFAULT_NETWORK):
+        return cls(op_hash160(key.to_bytes()), network)
+
+    def _to_pkscript(self) -> Script:
         return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
 
 
 class P2SH(LegacyAddress):
     type = AddressType.P2SH_P2WPKH
 
-    def _get_pkscript(self) -> Script:
+    def _to_pkscript(self) -> Script:
         return Script('OP_HASH160', self.hash, 'OP_EQUAL')
 
 
-class SegwitAddress(Address, ABC):
-    def __init__(self, address: str):
-        super().__init__(address)
-        self.version: int = self._bech32decode(address, self.network)[0]
+class SegwitAddress(BaseAddress, ABC):
+    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK, version: int = DEFAULT_WITNESS_VERSION):
+        self.version = version
+        super().__init__(hash, network)
 
     @classmethod
-    def from_hash(cls, hash: bytes, network: NetworkType = DEFAULT_NETWORK, *,
-                  version: int = DEFAULT_WITNESS_VERSION) -> 'SegwitAddress':
-        return cls(cls._bech32encode(hash, network, version=version))
+    def from_string(cls, string: str) -> 'SegwitAddress':
+        network = get_address_network(string)
+        assert network, 'failed to identify network (it can be specified)'
+        ver, hash = bech32.decode(PREFIXES['bech32'][network], string)
+        assert None not in [ver, hash], f"bech32 decode failed '{string}'"
+        return cls(bytes(cast(list[int], hash)), network, cast(int, ver))
 
-    def _get_hash(self) -> bytes:
-        return self._bech32decode(self.string, self.network)[1]
+    def _to_string(self) -> str:
+        s = bech32.encode(PREFIXES['bech32'][self.network], self.version, list(self.hash))
+        assert s is not None, f"bech32 encode failed '{self.hash.hex()}'"
+        return s
 
-    def _get_pkscript(self) -> Script:
+    def _to_pkscript(self) -> Script:
         return Script('OP_0', self.hash)
-
-    @staticmethod
-    def _bech32encode(data: bytes, network: NetworkType, *, version: int) -> str:
-        e = bech32.encode(PREFIXES['bech32'][network], version, list(data))
-        assert e != None
-        return e
-
-    @staticmethod
-    def _bech32decode(address: str, network: NetworkType) -> tuple[int, bytes]:
-        ver, data = bech32.decode(PREFIXES['bech32'][network], address)
-
-        if None in [ver, data]:
-            raise ValueError(f"invalid bech32 address '{address}'")
- 
-        return ver, bytes(data)  # type: ignore
 
 
 class P2WPKH(SegwitAddress):
     type = AddressType.P2WPKH
+
+    @classmethod
+    def from_pubkey(cls, key: PublicKey,
+                    version: int = DEFAULT_WITNESS_VERSION,
+                    network: NetworkType = DEFAULT_NETWORK):
+        return cls(op_hash160(key.to_bytes()), network, version)
 
 
 class P2WSH(SegwitAddress):
     type = AddressType.P2WSH
 
 
-def from_string(address: str) -> Address:
-    _type = get_address_type(address)
-    _cls = {
+def from_string(address: str) -> BaseAddress:
+    type, network = get_address_type(address), get_address_network(address)
+    cls = {
         AddressType.P2PKH: P2PKH,
         AddressType.P2SH_P2WPKH: P2SH,
         AddressType.P2WPKH: P2WPKH,
         AddressType.P2WSH: P2WSH
-    }.get(_type)  # type: ignore
+    }.get(type)  # type: ignore
+    assert cls, f"unsupported address '{address}'"
+    return cls.from_string(address)
 
-    if not _cls:
-        raise exceptions.InvalidAddress(address)
-
-    return _cls(address)
-
-def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> Address:  # fixme: data: Script | bytes
+def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> BaseAddress:  # fixme: data: Script | bytes
     script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
     length = len(script)
 
@@ -382,10 +373,10 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
         to_check, cls, hash_index = default_script_lens[length]
 
         if check(to_check):
-            return cls.from_hash(script[hash_index], network)
+            return cls(script[hash_index], network)
 
     elif length == 2 and check(segwit):  # if segwit address
         hs = script[1]
-        return segwit_script_lens[len(hs)].from_hash(hs)
+        return segwit_script_lens[len(hs)](hs)
 
-    raise ValueError(f'unsupported pkscript \'{pkscript}\'')
+    raise ValueError(f"unsupported pkscript '{pkscript}'")

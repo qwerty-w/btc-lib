@@ -18,7 +18,7 @@ def address(request, pv: pvobj, address_type: AddressType) -> addrobj:
             ins = address.ins
 
         case 'hash':
-            ins = type(address.ins).from_hash(bytes.fromhex(json['hash']), network)
+            ins = type(address.ins)(bytes.fromhex(json['hash']), network=network)
 
         case 'string':
             ins = from_string(json['string'][network.value])
@@ -55,8 +55,8 @@ class TestPrivatePublicKey:
     def test_pub_key_to_bytes(self, pv: pvobj, compressed):
         assert pv.pubins.to_bytes(compressed=compressed.bool).hex() == pv.json['pub']['hex'][compressed.string]
 
-    def test_pub_key_hash160(self, pv: pvobj, compressed):
-        assert pv.pubins.get_hash160(compressed=compressed.bool).hex() == pv.json['pub']['hash160'][compressed.string]
+    def test_pub_key_ophash160(self, pv: pvobj, compressed):
+        assert op_hash160(pv.pubins.to_bytes(compressed=compressed.bool)).hex() == pv.json['pub']['hash160'][compressed.string]
 
     def test_pub_key_from_signed_message(self, message: msgobj):
         assert PublicKey.from_signed_message(message.json['sig'], message.json['string']).key.to_string() == message.pv.pubins.key.to_string()
