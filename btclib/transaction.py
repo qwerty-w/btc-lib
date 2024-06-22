@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
 
-from btclib import exceptions
 from btclib.script import Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
                          ioList, TypeConverter, uint32, sint64, varint, d_sha256, op_hash160, \
@@ -235,7 +234,7 @@ class Input(UnsignableInput):
 
             case P2SH():
                 if self.private.public.get_address(AddressType.P2SH_P2WPKH, self.address.network).string != self.address.string:
-                    raise exceptions.DefaultSignSupportOnlyP2shP2wpkh
+                    raise TypeError('from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received')
 
                 self.script = Script(Script('OP_0', pb_ophash160).serialize().hex())
                 self.witness = sig
@@ -244,7 +243,7 @@ class Input(UnsignableInput):
                 self.witness = sig
 
             case _:
-                raise exceptions.InvalidAddressInstanceType(type(self.address))
+                raise TypeError('supports only P2PKH, P2SH, P2WPKH, P2WSH')
     
     def copy(self) -> 'Input':
         return Input(self.txid, self.vout, self.amount, self.private, self.address, self.sequence, self.script, self.witness)
@@ -300,8 +299,13 @@ class EmptyOutput(Output):
 
 
 class _Hash4SignGenerator:
-    @staticmethod
-    def get_default(tx: 'RawTransaction', inp_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
+    _SAME_OUT_INDEX_ERROR = lambda i: LookupError(
+        f'SIGHASH_SINGLE signs the output with the same index as the input, '
+        f'the input index is {i}, output with that index don\'t exists'
+    )
+
+    @classmethod
+    def get_default(cls, tx: 'RawTransaction', inp_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
         tx, sighash = tx.copy(), uint32(sighash)
         tx.clear_inputs()
         tx.inputs[inp_index].script = script4hash
@@ -317,7 +321,7 @@ class _Hash4SignGenerator:
             try:
                 out = tx.outputs[inp_index]
             except IndexError:
-                raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(inp_index) from None
+                raise cls._SAME_OUT_INDEX_ERROR(inp_index) from None
 
             tx.outputs = ioList(EmptyOutput() for _ in range(inp_index)) + [out,]
 
@@ -331,8 +335,8 @@ class _Hash4SignGenerator:
         serialized = tx.serialize(exclude_witnesses=True) + sighash.pack()
         return d_sha256(serialized)
 
-    @staticmethod
-    def get_segwit(tx: 'Transaction', inp_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
+    @classmethod
+    def get_segwit(cls, tx: 'Transaction', inp_index: int, script4hash: Script, sighash: int = SIGHASHES['all']) -> bytes:
         tx, sighash = tx.copy(), uint32(sighash)
         inps = seq = outs = b'\x00' * 32
         base = sighash & 0x1f
@@ -351,12 +355,13 @@ class _Hash4SignGenerator:
             try:
                 out = tx.outputs[inp_index]
             except IndexError:
-                raise exceptions.SighashSingleRequiresInputAndOutputWithSameIndexes(inp_index) from None
+                raise cls._SAME_OUT_INDEX_ERROR(inp_index) from None
 
             outs = out.serialize()
 
         # if tx.inputs[inp_index].amount is None:
-        #     raise exceptions.SegwitHash4SignRequiresInputAmount
+        #      raise TypeError('Transaction.get_hash4sign(input_index, ..., segwit=True) '
+        #                      'requires Input.amount is not None')
 
         s4h_b = script4hash.serialize()
         s4h_size = varint(len(s4h_b)).pack()
