@@ -82,6 +82,20 @@ PREFIXES = {
         b'\x6f': (AddressType.P2PKH, NetworkType.TEST),
         b'\x05': (AddressType.P2SH_P2WPKH, NetworkType.MAIN),
         b'\xc4': (AddressType.P2SH_P2WPKH, NetworkType.TEST)
+    },
+    'wif_reversed': {
+        b'\x80': NetworkType.MAIN,
+        b'\xef': NetworkType.TEST,
+
+        # for Electrum wifs
+        #  https://github.com/spesmilo/electrum/blob/3.0.0/RELEASE-NOTES#L42
+        b'\x81': NetworkType.MAIN,
+        b'\x82': NetworkType.MAIN,
+        b'\x83': NetworkType.MAIN,
+        b'\x84': NetworkType.MAIN,
+        b'\x85': NetworkType.MAIN,
+        b'\x86': NetworkType.MAIN,
+        b'\x87': NetworkType.MAIN
     }
 }
 

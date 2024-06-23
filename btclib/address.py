@@ -16,34 +16,51 @@ from btclib.utils import sha256, d_sha256, get_address_network, \
 
 
 class PrivateKey:
-    def __init__(self, key: Optional[SigningKey] = None):
+    def __init__(self,
+                 key: Optional[SigningKey] = None,
+                 pubkey_network: NetworkType = DEFAULT_NETWORK,
+                 *,
+                 pubkey_compressed: bool = True):
         self.key = key if key else SigningKey.generate(SECP256k1)
-        self.public = PublicKey(self.key.get_verifying_key())  # type: ignore
+        self.public = PublicKey(
+            cast(VerifyingKey, self.key.get_verifying_key()),
+            network=pubkey_network,
+            compressed=pubkey_compressed
+        )
 
     @classmethod
     def from_wif(cls, wif: str) -> 'PrivateKey':
         data = b58decode(wif.encode('utf8'))
         key = data[:-4]
         checksum = data[-4:]
+        assert d_sha256(key)[:4] == checksum, 'wif checksum verification failed'
 
-        h = d_sha256(key)
-        if not checksum == h[0:4]:
-            raise ValueError(f'wif checksum verification failed {checksum.hex()} != {h[0:4].hex()}')
+        p, key = key[:1], key[1:]
+        assert p in PREFIXES['wif_reversed'], f'unsupported wif prefix (0x{p.hex()})'
+        network = PREFIXES['wif_reversed'][p]
 
-        key = key[1:]  # network
-        key = key[:-1] if len(key) > 32 else key
+        if len(key) == 33:  # compressed
+            assert key[-1:] == b'\x01', f"incorrect compressed mark '{hex(key[-1])}'"
+            compressed = True
+            key = key[:-1]
 
-        return cls(SigningKey.from_string(key, SECP256k1))
+        elif len(key) == 32:
+            compressed = False
+
+        else:
+            raise ValueError(f'incorrect private key length ({len(key)})')
+
+        return cls(SigningKey.from_string(key, SECP256k1), pubkey_network=network, pubkey_compressed=compressed)
 
     @classmethod
-    def from_bytes(cls, pv_bytes: bytes):
-        return cls(SigningKey.from_string(pv_bytes, SECP256k1))
+    def from_bytes(cls, b: bytes, pubkey_network: NetworkType = DEFAULT_NETWORK, pubkey_compressed: bool = True):
+        return cls(SigningKey.from_string(b, SECP256k1), pubkey_network, pubkey_compressed=pubkey_compressed)
 
-    def sign_message(self, message: str, *, compressed: bool = True) -> str:
+    def sign_message(self, message: str) -> str:
         digest = get_magic_hash(message)
         sig = self.key.sign_digest_deterministic(digest, hashlib.sha256, sigencode_string)
 
-        rec_id = 31 if compressed else 27
+        rec_id = 31 if self.public.compressed else 27
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
         pub_b = self.public.key.to_string()
         for i, key in enumerate(keys):
@@ -80,69 +97,84 @@ class PrivateKey:
         new_sig = bytes([pref, full_len, der_type, r_len]) + r + bytes([der_type, s_len]) + new_s + bytes([sighash])
         return new_sig.hex()
 
-    def to_wif(self, network: NetworkType = DEFAULT_NETWORK, *, compressed: bool = True) -> str:
+    def to_wif(self,
+               pubkey_network: Optional[NetworkType] = None,
+               *,
+               pubkey_compressed: Optional[bool] = None) -> str:
+        network = self.public.network if pubkey_network is None else pubkey_network
+        compressed = self.public.compressed if pubkey_compressed is None else pubkey_compressed
+
         b = PREFIXES['wif'][network] + self.key.to_string()
         if compressed:
             b += b'\x01'
-
-        h = d_sha256(b)
-        checksum = h[0:4]
-        wif = b58encode(b + checksum)
-
-        return wif.decode('utf8')
+        checksum = d_sha256(b)[:4]
+        return b58encode(b + checksum).decode('utf8')
 
     def to_bytes(self) -> bytes:
         return self.key.to_string()
 
 
 class PublicKey:
-    def __init__(self, key: VerifyingKey):
-        self.key: VerifyingKey = key
+    def __init__(self, key: VerifyingKey, network: NetworkType = DEFAULT_NETWORK, *, compressed: bool = True):
+        self.key = key
+        self.network = network
+        self.compressed = compressed
 
     @classmethod
-    def from_bytes(cls, b: bytes) -> 'PublicKey':
-        prefix, b = b[0:1], b[1:]
+    def from_bytes(cls, b: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'PublicKey':
+        prefix, key = b[:1], b[1:]
+        assert len(key) in [32, 64], f'incorrect public key length ({len(key)})'
 
-        if len(b) > 33:  # uncompressed key
-            return cls(VerifyingKey.from_string(b, SECP256k1))
+        if prefix == PREFIXES['public_key']['uncompressed'] or len(key) == 64:
+            return cls(VerifyingKey.from_string(key, SECP256k1), compressed=False)
 
-        if prefix not in PREFIXES['public_key']['compressed'].values():
-            raise ValueError(f'unknown compression format (prefix) "{prefix.hex()}" (0x{prefix.hex() + b.hex()})')
-
-        x_coord = bytes2int(b)
+        assert prefix in PREFIXES['public_key']['compressed'].values(), f'unknown compressed public ' \
+                                                                        f'key prefix ({prefix})'
+        x_coord = bytes2int(key)
         y_values: list[int] = sqrt_mod((x_coord ** 3 + 7) % P, P, all_roots=True)  # type: ignore
         even, odd = sorted(y_values, key=lambda x: x % 2 != 0)
         y_coord: int = even if prefix == PREFIXES['public_key']['compressed']['even'] else odd
-        uncompressed_hex = '%0.64X%0.64X' % (x_coord, y_coord)
-        return cls(VerifyingKey.from_string(bytes.fromhex(uncompressed_hex), SECP256k1))
+        k = x_coord.to_bytes(32) + y_coord.to_bytes(32)
+        return cls(VerifyingKey.from_string(k, SECP256k1), network, compressed=True)
 
     @classmethod
-    def from_hex(cls, hex: str) -> 'PublicKey':
-        return cls.from_bytes(bytes.fromhex(hex))
-
-    @classmethod
-    def from_signed_message(cls, sig_b64: str, message: str) -> 'PublicKey':
-        sig = base64.b64decode(sig_b64.encode('utf8'))
-
-        if len(sig) != 65:
-            raise ValueError(f'decoded signature length should equals 65, but {len(sig)} received')
+    def from_signed_message(cls, base64sig: str, message: str,
+                            network: NetworkType = DEFAULT_NETWORK) -> 'PublicKey':
+        b = base64.b64decode(base64sig.encode('utf8'))
+        assert len(b) == 65, f'decoded signature length should equals 65, but {len(b)} received'
 
         digest = get_magic_hash(message)
-        rec_id, sig = sig[0], sig[1:]
+        recid, sig = b[0], b[1:]
 
-        if 27 <= rec_id <= 30:
-            rec_id -= 27
+        if 27 <= recid <= 30:
+            recid -= 27
+            compressed = False
 
-        elif 31 <= rec_id <= 34:
-            rec_id -= 31
+        elif 31 <= recid <= 34:
+            recid -= 31
+            compressed = True
 
         else:
-            raise ValueError(f'recovery id should be 27 <= rec_id <= 34, but {rec_id} received')
+            raise ValueError(f'recovery id should be 27 <= rec_id <= 34, but {recid} received')
 
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
-        return cls(keys[rec_id])
+        return cls(keys[recid], network=network, compressed=compressed)
 
-    def get_address(self, type: AddressType, network: NetworkType = DEFAULT_NETWORK) -> 'BaseAddress':
+    def change_compression(self, compressed: Optional[bool] = None) -> 'PublicKey':
+        return self if self.compressed == compressed else PublicKey(
+            self.key,
+            self.network,
+            compressed=not self.compressed if compressed is None else compressed
+        )
+
+    def change_network(self, network: Optional[NetworkType] = None) -> 'PublicKey':
+        return self if network == self.network else PublicKey(
+            self.key,
+            self.network.toggle() if network is None else network,
+            compressed=self.compressed
+        )
+
+    def get_address(self, type: AddressType) -> 'BaseAddress':
         cls = {
             AddressType.P2PKH: P2PKH,
             AddressType.P2SH_P2WPKH: P2SH,
@@ -156,60 +188,56 @@ class PublicKey:
                 return {
                     AddressType.P2PKH: P2PKH,
                     AddressType.P2WPKH: P2WPKH
-                }[type].from_pubkey(self, network=network)
+                }[type].from_pubkey(self, network=self.network)
 
             case AddressType.P2SH_P2WPKH:
                 script = Script('OP_0', op_hash160(self.to_bytes()))
-                return P2SH(op_hash160(script.serialize()), network)
+                return P2SH(op_hash160(script.serialize()), self.network)
 
             case AddressType.P2WSH:
                 script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG')
-                return P2WSH(sha256(script.serialize()), network=network)
+                return P2WSH(sha256(script.serialize()), network=self.network)
 
             case _:
                 raise TypeError(f"unknown address type '{type}'")
 
     @classmethod
-    def verify_message_for_address(cls, sig_b64: str, message: str, address: str) -> bool:
+    def verify_message_for_address(cls, base64sig: str, message: str, address: 'BaseAddress') -> bool:
         """
         WARNING! Default Bitcoin-Core verify message supports only P2PKH addresses. It's possible because
         one PublicKey -> one P2PKH addresses.
-        With segwit addresses and P2SH address it gets hard since one PublicKey -> not one P2SH/P2WPKH/P2WSH address.
-        But verify_message_for_address anyway supports all address types, it checks to
+        With segwit addresses and P2SH address it gets hard since one PublicKey -> not one P2SH/P2WPKH/P2WSH
+        address. But verify_message_for_address anyway supports all address types, it checks to
         P2SH/P2WPKH/P2WSH address was generated with PublicKey.get_address algorithm.
-        This means that address could be obtained from same public key just by a different method and
-        verify_message_for_address will be return False, remember this (in this situation you can use
-        PublicKey.from_signed_message() and by self-checking find out that from obtained public key
-        can get needed address). More details: https://github.com/bitcoin/bitcoin/issues/10542
+        This means that address could be obtained from same public key just by a different method
+        (diffrent script hash) and verify_message_for_address will be return False, remember this
+        (in this situation you can use PublicKey.from_signed_message() and by self-checking find
+        out that from obtained public key can get needed address).
+        More details: https://github.com/bitcoin/bitcoin/issues/10542
 
-        :param sig_b64: String signature in base64 encoding.
+        :param base64sig: String signature in base64 encoding.
         :param message: Message for signature.
         :param address: Address for check
         """
-        key = cls.from_signed_message(sig_b64, message)
+        key = cls.from_signed_message(base64sig, message, address.network)
+        return key.get_address(address.type) == address
 
-        if not (type := get_address_type(address)) or not (network := get_address_network(address)):
-            raise ValueError(f"unsupported address '{address}'")
-
-        return key.get_address(type, network).string == address
-
-    def verify_message(self, sig_b64: str, message: str):
+    def verify_message(self, base64sig: str, message: str) -> bool:
         magic_hash = get_magic_hash(message)
         try:
             return self.key.verify_digest(
-                base64.b64decode(sig_b64.encode('utf8'))[1:],
+                base64.b64decode(base64sig.encode('utf8'))[1:],
                 magic_hash,
                 sigdecode=sigdecode_string
             )
         except BadSignatureError:
             return False
 
-    def to_bytes(self, *, compressed: bool = True) -> bytes:
+    def to_bytes(self) -> bytes:
         b: bytes = self.key.to_string()
-
-        if not compressed:
+        if not self.compressed:
             return PREFIXES['public_key']['uncompressed'] + b
-        
+
         prefix = PREFIXES['public_key']['compressed']['even' if b[-1] % 2 == 0 else 'odd']
         return prefix + b[:32]
 
@@ -229,11 +257,10 @@ class BaseAddress(ABC):
         ...
 
     def change_network(self, network: Optional[NetworkType] = None) -> 'BaseAddress':
-        if network == self.network:
-            return self
-
-        network = network if network else self.network.toggle()
-        return type(self)(self.hash, network=network)
+        return self if network == self.network else type(self)(
+            self.hash,
+            network=self.network.toggle() if network is None else network
+        )
 
     @abstractmethod
     def _to_pkscript(self) -> Script:
@@ -242,7 +269,7 @@ class BaseAddress(ABC):
     @abstractmethod
     def _to_string(self) -> str:
         ...
-    
+
     def __str__(self):
         return self.string
 

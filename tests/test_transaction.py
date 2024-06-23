@@ -63,7 +63,7 @@ class inpobj:
             self.json['vout'],
             self.json['amount'],
             pv := PrivateKey.from_wif(self.json['wif']),
-            pv.public.get_address(AddressType[self.json['type']], NetworkType.TEST),
+            pv.public.change_network(NetworkType.TEST).get_address(AddressType[self.json['type']]),
             self.json['sequence'],
             Script.deserialize(self.json['script'] or b''),
             Script.deserialize(self.json['witness'] or b'', segwit=True)

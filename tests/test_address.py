@@ -41,22 +41,25 @@ class TestPrivatePublicKey:
         assert PrivateKey.from_wif(pv.json['pv']['wif'][compressed.string][network.value]).key.to_string().hex() == pv.json['pv']['hex']
 
     def test_private_key_to_wif(self, pv: pvobj, compressed, network):
-        assert pv.ins.to_wif(network, compressed=compressed.bool) == pv.json['pv']['wif'][compressed.string][network.value]
+        assert pv.ins.to_wif(network, pubkey_compressed=compressed.bool) == pv.json['pv']['wif'][compressed.string][network.value]
 
     def test_private_key_sign_message(self, message: msgobj):
-        assert message.pv.ins.sign_message(message.json['string'], compressed=message.json['compressed']) == message.json['sig']
+        c = message.pv.pubins.compressed
+        message.pv.pubins.compressed = message.json['compressed']
+        assert message.pv.ins.sign_message(message.json['string']) == message.json['sig']
+        message.pv.pubins.compressed = c
 
     def test_pub_key_creation(self, pv: pvobj, compressed):
         b = bytes.fromhex(pv.json['pub']['hex'][compressed.string])
         pub = PublicKey.from_bytes(b)
         assert pub.key.to_string() == pv.pubins.key.to_string()
-        assert pub.to_bytes(compressed=compressed.bool) == b
+        assert pub.to_bytes() == b
 
     def test_pub_key_to_bytes(self, pv: pvobj, compressed):
-        assert pv.pubins.to_bytes(compressed=compressed.bool).hex() == pv.json['pub']['hex'][compressed.string]
+        assert pv.pubins.change_compression(compressed.bool).to_bytes().hex() == pv.json['pub']['hex'][compressed.string]
 
     def test_pub_key_ophash160(self, pv: pvobj, compressed):
-        assert op_hash160(pv.pubins.to_bytes(compressed=compressed.bool)).hex() == pv.json['pub']['hash160'][compressed.string]
+        assert op_hash160(pv.pubins.change_compression(compressed.bool).to_bytes()).hex() == pv.json['pub']['hash160'][compressed.string]
 
     def test_pub_key_from_signed_message(self, message: msgobj):
         assert PublicKey.from_signed_message(message.json['sig'], message.json['string']).key.to_string() == message.pv.pubins.key.to_string()
@@ -68,7 +71,7 @@ class TestPrivatePublicKey:
         assert message.pv.pubins.verify_message_for_address(
             message.json['sig'],
             message.json['string'],
-            message.pv.pubins.get_address(address_type, network).string,
+            message.pv.pubins.change_network(network).change_compression(message.json['compressed']).get_address(address_type),
         )
 
 
