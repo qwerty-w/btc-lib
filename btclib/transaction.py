@@ -233,7 +233,7 @@ class Input(UnsignableInput):
                 self.script = sig
 
             case P2SH():
-                if self.private.public.get_address(AddressType.P2SH_P2WPKH, self.address.network).string != self.address.string:
+                if self.private.public.change_network(self.address.network).get_address(AddressType.P2SH_P2WPKH) != self.address:
                     raise TypeError('from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received')
 
                 self.script = Script(Script('OP_0', pb_ophash160).serialize().hex())

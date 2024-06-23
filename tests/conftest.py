@@ -118,7 +118,7 @@ class addrobj:
     pv: pvobj
 
     def __post_init__(self) -> None:
-        self.ins = self.pv.pubins.get_address(self.type, NetworkType.MAIN)
+        self.ins = self.pv.pubins.change_network(NetworkType.MAIN).get_address(self.type)
 
 
 class iscompressed:
