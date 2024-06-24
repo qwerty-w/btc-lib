@@ -72,7 +72,7 @@ class BaseAPI(ABC):
     def supports_network(cls, network: NetworkType) -> bool:
         return cls.uri is not NotImplemented and network in cls.uri
 
-    def toggle_network(self, network: typing.Optional[NetworkType] = None) -> None:
+    def change_network(self, network: typing.Optional[NetworkType] = None) -> None:
         if network == self.network:
             return
         if not network:
@@ -551,6 +551,13 @@ class Service(ExplorerAPI):
         self.priority = priority or Service.priority.copy()
         self.ignored_errors = ignored_errors or []
 
+    @classmethod
+    def supports_network(cls, network: NetworkType) -> bool:
+        return True
+
+    def get_endpoint(self, key: str, **kwargs) -> str:
+        raise NotImplementedError
+
     def resolve_priority(self, function: typing.Callable, priority: typing.Optional[_api_priority_T]) -> _api_priority_T:
         """Resolve and filters basepriority, self.priority and default Service.priority"""
         p: Service._api_priority_T = priority or self.priority.get(function, self.basepriority)
@@ -640,7 +647,7 @@ class Service(ExplorerAPI):
         BlockchainAPI,
         BlockstreamAPI,
         BlockchairAPI,
-        # BlockcypherAPI,  # todo:
+        # BlockcypherAPI,  # todo: implement me
         BitcoreAPI
     ]
     # custom priority for each method
