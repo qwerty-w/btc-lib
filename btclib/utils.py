@@ -331,7 +331,10 @@ def to_bitcoins(value: int) -> float:
     return float(Decimal(str(value)) / 100000000)
 
 
-def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}) -> str:
+def pprint_class(class_or_instance: type | Any,
+                 args: Iterable = (),
+                 kwargs: dict[Any, Any] = {},
+                 classmethod: Optional[str] = None) -> str:
     cls = class_or_instance if isinstance(class_or_instance, type) else type(class_or_instance)
     name = cls.__qualname__
     pv = lambda v: repr(v) if not isinstance(v, str) or v == '' else v
@@ -339,4 +342,5 @@ def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dic
         *(f'{pv(v)}' for v in args),
         *(f'{k}={pv(v)}' for k, v in kwargs.items())
     ])
-    return f'{name}({akw})'
+
+    return f'{name}{f'.{classmethod}' if classmethod else ''}({akw})'

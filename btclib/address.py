@@ -274,7 +274,7 @@ class BaseAddress(ABC):
         return self.string
 
     def __repr__(self):
-        return pprint_class(self, [self.__str__().__repr__()])
+        return pprint_class(self, [self.__str__().__repr__()], classmethod='from_string')
 
     def __eq__(self, other: 'BaseAddress'):
         return str(self) == str(other) if isinstance(other, BaseAddress) else NotImplemented
