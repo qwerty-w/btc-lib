@@ -130,7 +130,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
 class UnsignableInput(RawInput, SupportsCopyAndAmount):
     """
-    An input that has info about the amount, but doesn't have PrivateKey, 
+    An input that has info about the amount, but doesn't have PrivateKey,
     which is why it can't be signed using .default_sign (but can still using .custom_sign)
     """
 
@@ -402,7 +402,7 @@ class TransactionDeserializer:
 
     def is_segwit(self) -> bool:
         return self.b[4] == 0
-    
+
     def seek(self, s: int = 0, e: Optional[int] = None) -> None:
         self.s = s
         self.e = len(self.b) if e is None else e
@@ -502,7 +502,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     def __repr__(self):
         return str(self.as_dict())
-    
+
     def __eq__(self, value: object) -> bool:
         match value:
             case RawTransaction():
@@ -520,10 +520,10 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         return sum([
             w,
             2,  # segwit flag+mark size
-            len(b''.join(varint(len(inp.witness)).pack() + 
+            len(b''.join(varint(len(inp.witness)).pack() +
                          inp.witness.serialize(segwit=True) for inp in self.inputs))
         ]) if self.is_segwit() else w
-    
+
     @property
     def vsize(self) -> int:
         vsize = self.weight // 4
@@ -670,7 +670,7 @@ class Transaction(RawTransaction):
         """
         getter = _Hash4SignGenerator.get_segwit if segwit else _Hash4SignGenerator.get_default
         return getter(self, input_index, script4hash, sighash)
-    
+
     def default_sign(self, *, pass_unsignable: bool = False) -> None:  # todo: rename to .sign()
         """
         :param pass_unsignable: Pass inputs that don't support .default_sign() otherwise raise AssertionError
