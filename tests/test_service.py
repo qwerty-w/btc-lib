@@ -39,13 +39,7 @@ coinbase_transactions = [
 ]
 
 
-@pytest.fixture(scope='session')
-def session() -> requests.Session:
-    return requests.Session()
-
-
-@pytest.fixture(params=[BlockstreamAPI, BlockchairAPI, BlockchainAPI, BitcoreAPI])  # todo:  add BlockcypherAPI
-def api(request: pytest.FixtureRequest, pytestconfig: pytest.Config) -> API:
+def handle_noservice(request: pytest.FixtureRequest, pytestconfig: pytest.Config):
     no_service: str = pytestconfig.getoption('--no-service', default=None)  # type: ignore
     if no_service:
         no_service = no_service.strip()
@@ -60,6 +54,15 @@ def api(request: pytest.FixtureRequest, pytestconfig: pytest.Config) -> API:
         if request.param.__name__ in names:
             pytest.skip('cause in --no-service')
 
+
+@pytest.fixture(scope='session')
+def session() -> requests.Session:
+    return requests.Session()
+
+
+@pytest.fixture(params=[BlockstreamAPI, BlockchairAPI, BlockchainAPI, BitcoreAPI])  # todo:  add BlockcypherAPI
+def api(request: pytest.FixtureRequest, pytestconfig: pytest.Config) -> API:
+    handle_noservice(request, pytestconfig)
     return request.param
 
 
@@ -80,10 +83,10 @@ def uncollect_apis(get_network_f: typing.Callable[[dict[str, typing.Any]], str |
     """Exclude api if method not implemented or api doesn't support network"""
     def inner(item: pytest.Function, api: API, **kwargs):
         method = method_name or item.originalname.replace('test_', '')
-        assert hasattr(api, method), 'uncollect_apis requires function with name like in BaseAPI methods: test_<name> == BaseAPI.<name> or set method_name'
+        assert hasattr(api, method), 'uncollect_apis requires function with name like in ExplorerAPI methods: test_<name> == ExplorerAPI.<name> or set method_name'
 
         network = get_network_f(kwargs)
-        return not api.supports_network(NetworkType(network) if isinstance(network, str) else network) or 'BaseAPI' in getattr(api, method).__qualname__
+        return not api.supports_network(NetworkType(network) if isinstance(network, str) else network) or 'ExplorerAPI' in getattr(api, method).__qualname__
 
     return inner
 
@@ -96,11 +99,11 @@ def addr(request: pytest.FixtureRequest) -> tuple[BaseAddress, NetworkType]:
     return request.param
 
 
-class TestAPIs:
+class TestExplorerAPIs:
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
+    def test_get_address(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
-        inf = api(network, session).get_address(address)
+        inf = api(network, session, timeout=API_TIMEOUT).get_address(address)
         assert isinstance(inf, AddressInfo)
         assert all(isinstance(x, int) for x in [inf.received, inf.balance, inf.spent, inf.tx_count])
 
@@ -115,7 +118,7 @@ class TestAPIs:
         assert all(map(lambda tx: tx.serialize().hex() == transaction['serialized'], txs))
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address_transactions(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
+    def test_get_address_transactions(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
         f = api(network, session, timeout=API_TIMEOUT).get_address_transactions
         k = {'length': 10} if 'length' in f.__code__.co_varnames else {}
@@ -124,9 +127,9 @@ class TestAPIs:
         assert all(isinstance(tx, BroadcastedTransaction) for tx in txs)
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_unspent(self, session: Session, addr: tuple[BaseAddress, NetworkType], api: API):
+    def test_get_unspent(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
-        un = api(network, session).get_unspent(address)
+        un = api(network, session, timeout=API_TIMEOUT).get_unspent(address)
         assert all(isinstance(u, Unspent) for u in un)
         assert all(u.txid.hex() for u in un)
 
@@ -134,7 +137,7 @@ class TestAPIs:
     def test_head(self, session: Session, network: NetworkType, api: API):
         if api is not BlockchainAPI or network is NetworkType.MAIN:
             return
-        h = api(network, session).head()
+        h = api(network, session, timeout=API_TIMEOUT).head()
         assert not h.is_mempool()
         assert h > { NetworkType.MAIN: 840000, NetworkType.TEST: 2800000 }[network]  # last halving
 
@@ -146,3 +149,35 @@ class TestAPIs:
             if coinbase_tx['height'] != -1:
                 assert tx.inputs[0].parse_height() == coinbase_tx['height']   # type: ignore fixme: tx.inputs[0] type ?
             assert tx.serialize().hex() == coinbase_tx['serialized']
+
+
+@pytest.fixture(scope='module', params=[BitcoinFeesAPI, MempoolSpaceAPI])
+def rateapi(request: pytest.FixtureRequest, pytestconfig: pytest.Config, session: requests.Session):
+    handle_noservice(request, pytestconfig)
+    a = request.param(NetworkType.MAIN, session, timeout=API_TIMEOUT)
+    return a, a.get_rate()
+
+
+class TestFeeRateAPIs:
+    def tfeerateattrs(self, r: FeeRate):
+        for v in [
+            r.next,
+            r.halfhour,
+            r.hour,
+            r.low,
+            r.minimum
+        ]:
+            assert isinstance(v, int)
+            assert v > 0
+
+    def test_get_rate(self, rateapi: tuple[FeeRateAPI, FeeRate]):
+        a, r = rateapi
+        assert isinstance(r, FeeRate)
+        self.tfeerateattrs(r)
+
+    @pytest.mark.parametrize('vsize', [188, 10, 200, 249, 1203, 5, 800])
+    def test_calcfee(self, vsize: int, rateapi: tuple[FeeRateAPI, FeeRate]):
+        a, r = rateapi
+        cr = a.calcfee(vsize, r)
+        assert isinstance(cr, FeeRate)
+        self.tfeerateattrs(cr)
