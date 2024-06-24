@@ -193,7 +193,7 @@ class TestTransaction:
         assert tx.ins.is_segwit() is tx.json['segwit']
 
     def test_get_id(self, tx: txobj):
-        assert tx.ins.get_id() == tx.json['id']
+        assert tx.ins.id.hex() == tx.json['id']
 
     def test_default_sign(self, tx: txobj):
         ins = tx.ins.copy()
@@ -239,4 +239,4 @@ class TestTransaction:
             assert r.is_coinbase()
             assert isinstance(r.inputs[0], CoinbaseInput)
             assert r.inputs[0].parse_height() == jtx['blockheight']
-            assert r.get_id() == jtx['id']
+            assert r.id.hex() == jtx['id']
