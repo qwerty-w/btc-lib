@@ -729,4 +729,4 @@ class BroadcastedTransaction(Transaction):
         return cls.fromraw(RawTransaction.deserialize(raw), block, network, amounts)
 
     def get_confirmations(self, head: Block) -> int:
-        return int(head - self.block)
+        return 0 if self.block < 0 else int(head - self.block)
