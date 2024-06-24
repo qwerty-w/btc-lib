@@ -52,7 +52,7 @@ class ioList[T: SupportsCopyAndAmount](list[T]):
     @property
     def amount(self) -> int:
         return sum(x.amount for x in self)
-    
+
     def copy(self) -> list[T]:
         return ioList(i.copy() for i in self)
 
@@ -334,8 +334,9 @@ def to_bitcoins(value: int) -> float:
 def pprint_class(class_or_instance: type | Any, args: Iterable = (), kwargs: dict[Any, Any] = {}) -> str:
     cls = class_or_instance if isinstance(class_or_instance, type) else type(class_or_instance)
     name = cls.__qualname__
-    all_args = ', '.join([
-        *(f'{value}' for value in args),
-        *(f'{arg}={value if value != '' else "''"}' for arg, value in kwargs.items())
+    pv = lambda v: repr(v) if not isinstance(v, str) or v == '' else v
+    akw = ', '.join([
+        *(f'{pv(v)}' for v in args),
+        *(f'{k}={pv(v)}' for k, v in kwargs.items())
     ])
-    return f'{name}({all_args})'
+    return f'{name}({akw})'
