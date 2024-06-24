@@ -47,6 +47,13 @@ class Unspent:
         self.block = block
         self.address = address
 
+    def __repr__(self) -> str:
+        return pprint_class(
+            self,
+            [self.txid.hex(), self.vout, self.amount],
+            {'block': self.block, 'address': self.address}
+        )
+
 
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
     """An input that doesn't have info about amount"""
@@ -138,7 +145,10 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
         self.amount = amount
 
     def __repr__(self) -> str:
-        return pprint_class(self, kwargs=self.as_dict())
+        d = self.as_dict()
+        for k in ['script', 'witness']:
+            d.pop(k, None)
+        return pprint_class(self, kwargs=d)
 
     @classmethod
     def from_unspent(cls, unspent: Unspent, sequence: int = DEFAULT_SEQUENCE) -> 'UnsignableInput':
@@ -244,13 +254,15 @@ class Input(UnsignableInput):
 
             case _:
                 raise TypeError('supports only P2PKH, P2SH, P2WPKH, P2WSH')
-    
+
     def copy(self) -> 'Input':
         return Input(self.txid, self.vout, self.amount, self.private, self.address, self.sequence, self.script, self.witness)
 
     def as_dict(self) -> dict:
         d = super().as_dict()
+        sequence = d.pop('sequence')
         d['address'] = self.address.string
+        d['sequence'] = sequence
         return d
 
 
