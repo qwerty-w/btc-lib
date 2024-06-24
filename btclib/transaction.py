@@ -511,6 +511,10 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
                 return super().__eq__(value)
 
     @property
+    def id(self) -> bytes:
+        return d_sha256(self.serialize(exclude_witnesses=True))[::-1]
+
+    @property
     def weight(self) -> int:
         w = len(self.serialize(exclude_witnesses=True)) * 4
         return sum([
@@ -563,9 +567,6 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     def is_segwit(self) -> bool:
         return any([not inp.witness.is_empty() for inp in self.inputs])
-
-    def get_id(self) -> str:
-        return d_sha256(self.serialize(exclude_witnesses=True))[::-1].hex()
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *, sighash: int = SIGHASHES['all']) -> bytes:
         """
