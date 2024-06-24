@@ -145,7 +145,7 @@ class ExplorerAPI(BaseAPI):
     def head(self) -> Block:
         raise NotImplementedError
 
-    def push(self, tx: Transaction) -> typing.Optional[typing.Any]:
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
         raise NotImplementedError
 
 
@@ -244,8 +244,9 @@ class BlockchairAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['context']['state'])
 
-    def push(self, tx: Transaction) -> typing.Optional[typing.Any]:
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
+        return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
 class BlockstreamAPI(ExplorerAPI):
@@ -352,8 +353,9 @@ class BlockstreamAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').text)
 
-    def push(self, tx: RawTransaction) -> typing.Optional[typing.Any]:
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
         self.post('push', session_params={'data': { self.pushing['param']: tx.serialize().hex() }})
+        return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
 class BlockchainAPI(ExplorerAPI):
@@ -437,15 +439,15 @@ class BlockchainAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['height'])
 
-    def push(self, tx: Transaction) -> typing.Optional[typing.Any]:
-        self.session.post('', headers={'Content-Type': 'text/plain'}, data=b'')
-        return self.post('push', session_params={
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+        self.post('push', session_params={
             'headers': {
                 'accept': 'application/json',
                 'Content-Type': 'text/plain'
             },
             'data': tx.serialize().hex()
         })
+        return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
 class BlockcypherAPI(ExplorerAPI):
@@ -477,7 +479,7 @@ class BlockcypherAPI(ExplorerAPI):
     def head(self) -> Block:
         raise NotImplementedError
 
-    def push(self, tx: Transaction) -> typing.Optional[typing.Any]:
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
         raise NotImplementedError
 
 
@@ -523,8 +525,9 @@ class BitcoreAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['height'])
 
-    def push(self, tx: Transaction) -> typing.Optional[typing.Any]:
+    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
+        return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
 class Service(ExplorerAPI):
@@ -533,7 +536,7 @@ class Service(ExplorerAPI):
     Priority:
     """
     type _api_priority_T = list[type[BaseAPI]]
-    type _network_errors_T = list[type[NetworkError] | type[ConnectionError]]
+    type _network_errors_T = list[type[Exception]]
 
     def __init__(self,
                  network: NetworkType = DEFAULT_NETWORK,
@@ -549,7 +552,7 @@ class Service(ExplorerAPI):
         super().__init__(network, session, timeout)
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
-        self.ignored_errors = ignored_errors or []
+        self.ignored_errors = ignored_errors or [ConnectionError, requests.exceptions.ReadTimeout]
 
     @classmethod
     def supports_network(cls, network: NetworkType) -> bool:
@@ -619,9 +622,9 @@ class Service(ExplorerAPI):
         return self.call('head', [], {}, priority, ignored_errors)
 
     def push(self,
-             tx: Transaction,
+             tx: RawTransaction,
              priority: typing.Optional[_api_priority_T] = None,
-             ignored_errors: typing.Optional[_network_errors_T] = None) -> typing.Optional[typing.Any]:
+             ignored_errors: typing.Optional[_network_errors_T] = None) -> BroadcastedTransaction:
         return self.call('push', [tx], {}, priority, ignored_errors)
 
     def convert_transaction(self,
