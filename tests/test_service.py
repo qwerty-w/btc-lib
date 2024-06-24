@@ -7,7 +7,7 @@ from btclib.service import *
 
 
 API_TIMEOUT = 30
-API = type[BaseAPI]
+API = type[ExplorerAPI]
 transactions = [
     {
         # no sigscript

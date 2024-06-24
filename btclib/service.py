@@ -1,5 +1,5 @@
 import typing
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import requests
 
@@ -52,10 +52,8 @@ class AddressInfo:
 
 
 class BaseAPI(ABC):
-    supported_networks: frozenset[NetworkType] = frozenset([NetworkType.MAIN, NetworkType.TEST])
     uri: dict[NetworkType, str] = NotImplemented
     endpoints: dict[str, str] = NotImplemented
-    pushing: dict[str, str] = NotImplemented
 
     _unsupported_network_error = lambda s, n: TypeError(f'{s.__class__.__name__} doesn\'t support {n.value} network')
 
@@ -72,7 +70,7 @@ class BaseAPI(ABC):
 
     @classmethod
     def supports_network(cls, network: NetworkType) -> bool:
-        return network in cls.supported_networks
+        return network in cls.uri
 
     def toggle_network(self, network: typing.Optional[NetworkType] = None) -> None:
         if network == self.network:
@@ -114,13 +112,17 @@ class BaseAPI(ABC):
              handle_response: bool = True,
              **kwargs) -> requests.Response:
         return self.request('POST', endpoint_key, session_params, handle_response=handle_response, **kwargs)
-    
+
     def handle_response(self, r: requests.Response) -> None:
         """Base response handling for subclasses"""
         if r.status_code == 404:
             raise NotFoundError(self, r)
         if r.status_code != 200:  # fixme: 200 <= x < 300
             raise NetworkError(self, r)
+
+
+class ExplorerAPI(BaseAPI):
+    pushing: dict[str, str] = NotImplemented
 
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         raise NotImplementedError
@@ -130,7 +132,7 @@ class BaseAPI(ABC):
 
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
         raise NotImplementedError
-    
+
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
         return list(map(self.get_transaction, txids))
 
@@ -147,7 +149,7 @@ class BaseAPI(ABC):
         raise NotImplementedError
 
 
-class BlockchairAPI(BaseAPI):
+class BlockchairAPI(ExplorerAPI):
     uri = {
         NetworkType.MAIN: 'https://api.blockchair.com/bitcoin',
         NetworkType.TEST: 'https://api.blockchair.com/bitcoin/testnet'
@@ -246,7 +248,7 @@ class BlockchairAPI(BaseAPI):
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
 
 
-class BlockstreamAPI(BaseAPI):
+class BlockstreamAPI(ExplorerAPI):
     uri = {
         NetworkType.MAIN: 'https://blockstream.info/api',
         NetworkType.TEST: 'https://blockstream.info/testnet/api'
@@ -310,10 +312,10 @@ class BlockstreamAPI(BaseAPI):
                                  last_seen_txid: typing.Optional[str] = None,
                                  handle_overflow: bool = False)  -> list[BroadcastedTransaction]:
         """
-        Blockstream returns 50 unconfirmed (mempool) and 25 confirmed transactions. 
+        Blockstream returns 50 unconfirmed (mempool) and 25 confirmed transactions.
         Mempool transactions can be more than 50, but Blockstream doesn't process them.
 
-        :param handle_overflow: if true raise error if mempool transactions can be more than Blockstream returns 
+        :param handle_overflow: if true raise error if mempool transactions can be more than Blockstream returns
         """
         if last_seen_txid:
             return list(map(self.process_transaction, self.get(
@@ -354,8 +356,7 @@ class BlockstreamAPI(BaseAPI):
         self.post('push', session_params={'data': { self.pushing['param']: tx.serialize().hex() }})
 
 
-class BlockchainAPI(BaseAPI):
-    supported_networks = frozenset([NetworkType.MAIN])
+class BlockchainAPI(ExplorerAPI):
     uri = {
         NetworkType.MAIN: 'https://api.blockchain.info/haskoin-store/btc'
     }
@@ -447,15 +448,14 @@ class BlockchainAPI(BaseAPI):
         })
 
 
-class BlockcypherAPI(BaseAPI):
-    supported_networks: frozenset[NetworkType] = frozenset([NetworkType.MAIN, NetworkType.TEST])
+class BlockcypherAPI(ExplorerAPI):
     uri: dict[NetworkType, str] = NotImplemented
     endpoints: dict[str, str] = NotImplemented
     pushing: dict[str, str] = NotImplemented
 
     def handle_response(self, r: requests.Response) -> None:
         pass
-    
+
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         raise NotImplementedError
 
@@ -464,7 +464,7 @@ class BlockcypherAPI(BaseAPI):
 
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
         raise NotImplementedError
-    
+
     def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
         return list(map(self.get_transaction, txids))
 
@@ -481,7 +481,7 @@ class BlockcypherAPI(BaseAPI):
         raise NotImplementedError
 
 
-class BitcoreAPI(BaseAPI):
+class BitcoreAPI(ExplorerAPI):
     uri = {
         NetworkType.MAIN: 'https://api.bitcore.io/api/BTC/mainnet',
         NetworkType.TEST: 'https://api.bitcore.io/api/BTC/testnet'
@@ -527,10 +527,10 @@ class BitcoreAPI(BaseAPI):
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
 
 
-class Service(BaseAPI):
+class Service(ExplorerAPI):
     """...
 
-    Priority: 
+    Priority:
     """
     type _api_priority_T = list[type[BaseAPI]]
     type _network_errors_T = list[type[NetworkError] | type[ConnectionError]]
@@ -586,7 +586,7 @@ class Service(BaseAPI):
                         priority: typing.Optional[_api_priority_T] = None,
                         ignored_errors: typing.Optional[_network_errors_T] = None) -> BroadcastedTransaction:
         return self.call('get_transaction', [txid], {}, priority, ignored_errors)
-    
+
     def get_transactions(self,
                          txids: list[str],
                          priority: typing.Optional[_api_priority_T] = None,
@@ -602,7 +602,7 @@ class Service(BaseAPI):
                     priority: typing.Optional[_api_priority_T] = None,
                     ignored_errors: typing.Optional[_network_errors_T] = None) -> list[Unspent]:
         return self.call('get_unspent', [address], {}, priority, ignored_errors)
-    
+
     def get_unspent_inputs(self, *args: tuple[PrivateKey, BaseAddress]) -> list[Input]:
         return [Input.from_unspent(unspent, pv, address) for pv, address in args for unspent in self.get_unspent(address)]
 
@@ -658,7 +658,57 @@ class Service(BaseAPI):
 
 @dataclass
 class FeeRate:
-    ...
+    # block: satoshi
+    next: int
+    halfhour: int  # 3 blocks
+    hour: int  # 6 blocks
+    low: int  # ~12 hours (72 blocks)
+    minimum: int
 
-class BitcoinFeesAPI:
-    ...
+
+class FeeRateAPI(BaseAPI):
+    @abstractmethod
+    def get_rate() -> FeeRate:
+        raise NotImplementedError
+
+    def calcfee(self, vsize: int, rate: typing.Optional[FeeRate] = None) -> FeeRate:
+        rate = rate or self.get_rate()
+        return FeeRate(
+            rate.next * vsize,
+            rate.halfhour * vsize,
+            rate.hour * vsize,
+            rate.low * vsize,
+            rate.minimum * vsize
+        )
+
+
+class BitcoinFeesAPI(FeeRateAPI):
+    uri = {
+        NetworkType.MAIN: 'https://bitcoinfees.net'
+    }
+    endpoints = {
+        'fees': '{uri}/api.json'
+    }
+
+    def get_rate(self) -> FeeRate:
+        d: dict[str, int] = self.get('fees').json()['fee_by_block_target']
+        return FeeRate(*[d[b] // 10 ** 3 for b in ['1', '3', '6', '72', '100']])
+
+
+class MempoolSpaceAPI(FeeRateAPI):
+    uri = {
+        NetworkType.MAIN: 'https://mempool.space'
+    }
+    endpoints = {
+        'fees': '{uri}/api/v1/fees/recommended'
+    }
+
+    def get_rate(self) -> FeeRate:
+        d: dict[str, int] = self.get('fees').json()
+        return FeeRate(
+            d['fastestFee'],
+            d['halfHourFee'],
+            d['hourFee'],
+            d['economyFee'],
+            d['minimumFee']
+        )
