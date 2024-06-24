@@ -70,7 +70,7 @@ class BaseAPI(ABC):
 
     @classmethod
     def supports_network(cls, network: NetworkType) -> bool:
-        return network in cls.uri
+        return cls.uri is not NotImplemented and network in cls.uri
 
     def toggle_network(self, network: typing.Optional[NetworkType] = None) -> None:
         if network == self.network:
@@ -640,7 +640,7 @@ class Service(ExplorerAPI):
         BlockchainAPI,
         BlockstreamAPI,
         BlockchairAPI,
-        BlockcypherAPI,
+        # BlockcypherAPI,  # todo:
         BitcoreAPI
     ]
     # custom priority for each method
