@@ -66,7 +66,7 @@ class Script(list[bytes]):
                     length: Optional[int] = None, freeze: bool = False) -> Self:
         """
         :param raw: Hex, bytes or list of bytes (like init_T but exclude string opcode)
-        :param segwit: 
+        :param segwit:
         :param length: Maximum items count
         :param freeze: Make script frozen: script .serialize() will returns deserialized value
                        until the first internal change (need for coinbase transactions in
@@ -94,12 +94,10 @@ class Script(list[bytes]):
 
         return cls(*script, validation=False, frozen=frozen)
 
-    def is_frozen(self) -> bool:
+    @property
+    def frozen(self) -> bool:
         return self._frozen is not None
 
-    def is_empty(self) -> bool:
-        return not len(self)
-    
     def unfreeze(self) -> None:
         self._frozen = None
 
@@ -110,16 +108,16 @@ class Script(list[bytes]):
     def extend(self, iterable: Iterable[init_T]) -> None:
         super().extend(validator(iterable))
         self.unfreeze()
-    
+
     def insert(self, index: SupportsIndex, instance: init_T) -> None:
         if v := validate(instance): super().insert(index, v)
         self.unfreeze()
-    
+
     def copy(self) -> 'Script':
         return type(self)(*self, validation=False)
 
     def serialize(self, *, segwit: bool = False) -> bytes:
-        if self.is_frozen():
+        if self.frozen:
             return cast(bytes, self._frozen)
 
         b = b''

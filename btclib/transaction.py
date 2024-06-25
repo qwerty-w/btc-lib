@@ -119,7 +119,7 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
             'vout': self.vout,
             'script': self.script.serialize().hex()
         }  # type: ignore
-        if not self.witness.is_empty():
+        if self.witness:
             d['witness'] = self.witness.serialize().hex()
         d['sequence'] = self.sequence
         return d
@@ -566,7 +566,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
         return any(isinstance(i, CoinbaseInput) for i in self.inputs)
 
     def is_segwit(self) -> bool:
-        return any([not inp.witness.is_empty() for inp in self.inputs])
+        return any([inp.witness for inp in self.inputs])
 
     def get_hash4sign(self, input_index: int, script4hash: Script, *, sighash: int = SIGHASHES['all']) -> bytes:
         """
