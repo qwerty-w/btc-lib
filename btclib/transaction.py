@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
+from typing import Any, Iterable, Mapping, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
 
 from btclib.script import Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
@@ -8,6 +8,15 @@ from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, Supports
 from btclib.address import BaseAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
                          SIGHASHES, EMPTY_SEQUENCE, NEGATIVE_SATOSHI, AddressType, NetworkType
+
+
+class UnspentDict[T: str | bytes](TypedDict):
+    txid: T
+    vout: uint32
+    amount: sint64
+    block: int
+    pkscript: T
+    address: str
 
 
 class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.13)
@@ -37,7 +46,7 @@ class Block(int):
         return self == -1
 
 
-class Unspent:
+class Unspent(SupportsDump):
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
     amount: TypeConverter[int, sint64] = TypeConverter(sint64)
     block: TypeConverter[int, Block] = TypeConverter(Block)
@@ -55,6 +64,19 @@ class Unspent:
             [self.txid.hex(), self.vout, self.amount],
             {'block': self.block, 'address': self.address}
         )
+
+    def as_dict(self) -> UnspentDict[str]:
+        return {
+            'txid': self.txid.hex(),
+            'vout': self.vout,
+            'amount': self.amount,
+            'block': self.block,
+            'pkscript': self.address.pkscript.serialize().hex(),
+            'address': self.address.string
+        }
+
+    def as_json(self, indent: Optional[int] = None, **kwargs) -> str:
+        return super().as_json(self.as_dict(), indent, **kwargs)
 
 
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
@@ -126,8 +148,8 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
         d['sequence'] = self.sequence
         return d
 
-    def as_json(self, *, indent: Optional[int] = None) -> str:
-        return super().as_json(self.as_dict(), indent=indent)
+    def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
+        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class UnsignableInput(RawInput, SupportsCopyAndAmount):
@@ -306,7 +328,7 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         }
 
     def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
-        return super().as_json(self.as_dict(**kwargs), indent=indent)
+        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class EmptyOutput(Output):
@@ -616,8 +638,8 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             'locktime': self.locktime
         }
 
-    def as_json(self, *, indent: Optional[int] = None) -> str:
-        return super().as_json(self.as_dict(), indent=indent)
+    def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
+        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class Transaction(RawTransaction):

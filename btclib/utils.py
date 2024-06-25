@@ -20,8 +20,8 @@ class SupportsDump(Protocol):
         ...
 
     @abstractmethod
-    def as_json(self, value: Mapping[Any, Any] | list, indent: Optional[int] = None) -> str:
-        return json.dumps(value, indent=indent)
+    def as_json(self, value: Mapping[Any, Any] | list, indent: Optional[int] = None, **kwargs) -> str:
+        return json.dumps(value, indent=indent, **kwargs)
 
 
 @runtime_checkable
