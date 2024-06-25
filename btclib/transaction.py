@@ -13,8 +13,10 @@ from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEF
 class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.13)
     txid: T
     vout: uint32
+    amount: NotRequired[int]
     script: T
     witness: NotRequired[T]
+    address: NotRequired[str]
     sequence: uint32
 
 
@@ -145,7 +147,7 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
         self.amount = amount
 
     def __repr__(self) -> str:
-        d = self.as_dict()
+        d = cast(dict[str, str], self.as_dict())
         for k in ['script', 'witness']:
             d.pop(k, None)
         return pprint_class(self, kwargs=d)
@@ -157,12 +159,12 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
     def copy(self) -> 'UnsignableInput':
         return UnsignableInput(self.txid, self.vout, self.amount, self.sequence, self.script, self.witness)
 
-    def as_dict(self) -> dict[str, str | uint32 | sint64]:
-        d = cast(OrderedDict[str, str | uint32 | sint64], OrderedDict(super().as_dict()))
+    def as_dict(self) -> InputDict[str]:
+        d = OrderedDict(super().as_dict())
         d['amount'] = self.amount
         for K in ['amount', 'vout', 'txid']:
             d.move_to_end(K, last=False)
-        return dict(d)
+        return cast(InputDict[str], dict(d))
 
 
 class CoinbaseInput(UnsignableInput):
@@ -182,8 +184,7 @@ class CoinbaseInput(UnsignableInput):
 
     def __repr__(self) -> str:
         return pprint_class(self, kwargs={
-            'script': self.script.serialize().hex(),
-            'witness': self.witness.serialize(segwit=True).hex()
+            'script': self.script.serialize().hex()
         })
 
     def parse_height(self) -> int:
@@ -192,6 +193,9 @@ class CoinbaseInput(UnsignableInput):
         For blocks with ver < 2 returns wrong value.
         """
         return bytes2int(self.script[0], 'little')  # todo: maybe prevent indexerror?
+
+    def as_dict(self) -> InputDict[str]:
+        return RawInput.as_dict(self)
 
 
 class Input(UnsignableInput):
@@ -258,9 +262,9 @@ class Input(UnsignableInput):
     def copy(self) -> 'Input':
         return Input(self.txid, self.vout, self.amount, self.private, self.address, self.sequence, self.script, self.witness)
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> InputDict[str]:
         d = super().as_dict()
-        sequence = d.pop('sequence')
+        sequence = d.pop('sequence')  # type: ignore
         d['address'] = self.address.string
         d['sequence'] = sequence
         return d
