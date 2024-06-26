@@ -10,6 +10,9 @@ from btclib.address import PrivateKey
 from btclib.const import AddressType, NetworkType
 
 
+type address_T = Literal[AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH]
+
+
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--no-service", action="store", help='Exclude some services in test_service.py. '
                                                           'Supports recording as: "api1,api2" / "api1 api2" / "api1, api2"')
@@ -128,7 +131,7 @@ class iscompressed:
 
     def __repr__(self) -> str:
         return self.string
-    
+
     def __bool__(self) -> bool:
         return self.bool
 
@@ -157,7 +160,7 @@ def message(request) -> msgobj:
     params=[AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH],
     ids=lambda at: at.value
 )
-def address_type(request) -> AddressType:
+def address_type(request) -> address_T:
     """
     :param request: The type of address "P2SH-P2WPKH" is written through a dash because PublicKey.get_address
                     is perceived only in this way.
@@ -167,7 +170,7 @@ def address_type(request) -> AddressType:
 
 
 @pytest.fixture
-def address(pv: pvobj, address_type: AddressType) -> addrobj:
+def address(pv: pvobj, address_type: address_T) -> addrobj:
     """
     Return prepared unit[address_type], add address instance.
     """

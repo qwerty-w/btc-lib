@@ -1,10 +1,10 @@
 import pytest
-from .conftest import pvobj, addrobj, msgobj
+from .conftest import pvobj, addrobj, msgobj, address_T
 from btclib.address import *
 
 
 @pytest.fixture(params=['pub', 'hash', 'string', 'pkscript'])  # address instance from hash/pub
-def address(request, pv: pvobj, address_type: AddressType) -> addrobj:
+def address(request, pv: pvobj, address_type: address_T) -> addrobj:
     """
     It differs from the "address" fixture in conftest.py in that it has parameterization "from hash / pub".
     Has the same name for convenience.
