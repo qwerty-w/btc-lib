@@ -1,4 +1,3 @@
-from email.headerregistry import Address
 import json
 import hashlib
 from decimal import Decimal
@@ -8,7 +7,7 @@ from typing import Any, Callable, Iterable, Literal, Optional, Self, \
                    overload, Protocol, runtime_checkable, Mapping
 
 from btclib import bech32
-from btclib.const import PREFIXES, SEPARATORS, SEPARATORS_REVERSED, AddressType, NetworkType
+from btclib.const import PREFIXES, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, SEPARATORS, SEPARATORS_REVERSED, AddressType, NetworkType
 
 
 byteorder_T = Literal['little', 'big']
@@ -292,8 +291,8 @@ def get_address_type(address: str) -> Optional[AddressType]:
         elif len(address) == 62:
             ver, prog = bech32.decode(address[:2], address)
             return {
-                0: AddressType.P2WSH,
-                1: AddressType.P2TR
+                SEGWIT_V0_WITVER: AddressType.P2WSH,
+                SEGWIT_V1_WITVER: AddressType.P2TR
             }.get(ver) if prog else None  # type: ignore
 
 
@@ -318,7 +317,7 @@ def validate_address(address: str, address_type: AddressType, address_network: N
 
     elif real_type == AddressType.P2WPKH:
         ver, prog = bech32.decode(PREFIXES['bech32'][address_network], address)
-        return ver == 0 and prog is not None
+        return ver == SEGWIT_V0_WITVER and prog is not None
 
     elif real_type in [AddressType.P2WSH, AddressType.P2TR]:
         ... # already decoded and validated in get_address_type
