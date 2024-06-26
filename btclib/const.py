@@ -6,6 +6,7 @@ class AddressType(Enum):
     P2SH_P2WPKH = 'P2SH_P2WPKH'
     P2WPKH = 'P2WPKH'
     P2WSH = 'P2WSH'
+    P2TR = 'P2TR'
 
 
 class NetworkType(Enum):
@@ -21,7 +22,8 @@ P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
 DEFAULT_VERSION = 2
 DEFAULT_LOCKTIME = 0
-DEFAULT_WITNESS_VERSION = 0
+SEGWIT_V0_WITVER = 0
+SEGWIT_V1_WITVER = 1
 DEFAULT_SEQUENCE = 4294967295
 DEFAULT_NETWORK = NetworkType.MAIN
 DEFAULT_SERVICE_TIMEOUT = 10
