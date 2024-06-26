@@ -10,7 +10,8 @@ from sympy import sqrt_mod
 
 from btclib import bech32
 from btclib.script import Script
-from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
+from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, \
+                         DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
 from btclib.utils import sha256, d_sha256, get_address_network, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
 
@@ -317,8 +318,9 @@ class P2SH(LegacyAddress):
 
 
 class SegwitAddress(BaseAddress, ABC):
-    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK, version: int = DEFAULT_WITNESS_VERSION):
-        self.version = version
+    version: int = NotImplemented
+
+    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK):
         super().__init__(hash, network)
 
     @classmethod
@@ -327,7 +329,8 @@ class SegwitAddress(BaseAddress, ABC):
         assert network, 'failed to identify network (it can be specified)'
         ver, hash = bech32.decode(PREFIXES['bech32'][network], string)
         assert None not in [ver, hash], f"bech32 decode failed '{string}'"
-        return cls(bytes(cast(list[int], hash)), network, cast(int, ver))
+        assert ver == cls.version, f'{cls.__name__}() supports only witness version {cls.version} but {ver} received'
+        return cls(bytes(cast(list[int], hash)), network)
 
     def _to_string(self) -> str:
         s = bech32.encode(PREFIXES['bech32'][self.network], self.version, list(self.hash))
@@ -340,16 +343,25 @@ class SegwitAddress(BaseAddress, ABC):
 
 class P2WPKH(SegwitAddress):
     type = AddressType.P2WPKH
+    version = 0
 
     @classmethod
     def from_pubkey(cls, key: PublicKey,
-                    version: int = DEFAULT_WITNESS_VERSION,
                     network: NetworkType = DEFAULT_NETWORK):
-        return cls(op_hash160(key.to_bytes()), network, version)
+        return cls(op_hash160(key.to_bytes()), network)
 
 
 class P2WSH(SegwitAddress):
     type = AddressType.P2WSH
+    version = 0
+
+
+class P2TR(SegwitAddress):
+    type = AddressType.P2TR
+    version = 1
+
+    def _to_pkscript(self) -> Script:
+        return Script('OP_1', self.hash)
 
 
 def from_string(address: str) -> BaseAddress:
@@ -358,10 +370,12 @@ def from_string(address: str) -> BaseAddress:
         AddressType.P2PKH: P2PKH,
         AddressType.P2SH_P2WPKH: P2SH,
         AddressType.P2WPKH: P2WPKH,
-        AddressType.P2WSH: P2WSH
+        AddressType.P2WSH: P2WSH,
+        AddressType.P2TR: P2TR
     }.get(type)  # type: ignore
     assert cls, f"unsupported address '{address}'"
     return cls.from_string(address)
+
 
 def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> BaseAddress:
     script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
@@ -376,9 +390,6 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
     p2sh = {
         0: 'OP_HASH160',
         -1: 'OP_EQUAL'
-    }
-    segwit = {
-        0: 'OP_0'
     }
 
     default_script_lens: dict[int, tuple[dict[int, str], type[LegacyAddress], int]] = {
@@ -398,8 +409,12 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
         if check(to_check):
             return cls(script[hash_index], network)
 
-    elif length == 2 and check(segwit):  # if segwit address
-        hs = script[1]
-        return segwit_script_lens[len(hs)](hs)
+    elif length == 2:  # segwit
+        op, hs = script
+        if op == OP_CODES['OP_0']:
+            return segwit_script_lens[len(hs)](hs)
+
+        elif op == OP_CODES['OP_1']:
+            return P2TR(hs)
 
     raise ValueError(f"unsupported pkscript '{pkscript}'")

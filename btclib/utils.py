@@ -1,3 +1,4 @@
+from email.headerregistry import Address
 import json
 import hashlib
 from decimal import Decimal
@@ -289,7 +290,11 @@ def get_address_type(address: str) -> Optional[AddressType]:
             return AddressType.P2WPKH
 
         elif len(address) == 62:
-            return AddressType.P2WSH
+            ver, prog = bech32.decode(address[:2], address)
+            return {
+                0: AddressType.P2WSH,
+                1: AddressType.P2TR
+            }.get(ver) if prog else None  # type: ignore
 
 
 def validate_address(address: str, address_type: AddressType, address_network: NetworkType) -> bool:
@@ -311,11 +316,12 @@ def validate_address(address: str, address_type: AddressType, address_network: N
         if h[:4] != checksum:
             return False
 
-    elif real_type in (AddressType.P2WPKH, AddressType.P2WSH):
-        ver, array = bech32.decode(PREFIXES['bech32'][address_network], address)
+    elif real_type == AddressType.P2WPKH:
+        ver, prog = bech32.decode(PREFIXES['bech32'][address_network], address)
+        return ver == 0 and prog is not None
 
-        if None in (ver, array):
-            return False
+    elif real_type in [AddressType.P2WSH, AddressType.P2TR]:
+        ... # already decoded and validated in get_address_type
 
     else:
         return False
