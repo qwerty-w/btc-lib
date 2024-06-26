@@ -11,6 +11,7 @@ from sympy import sqrt_mod
 from btclib import bech32
 from btclib.script import Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, \
+                         HASH160_LENGTH, SHA256_LENGTH, SCHNORR_COMPRESSED_PUBKEY_LENGTH, \
                          DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
 from btclib.utils import sha256, d_sha256, get_address_network, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
@@ -245,8 +246,11 @@ class PublicKey:
 
 class BaseAddress(ABC):
     type: AddressType = NotImplemented
+    hashlength: int = NotImplemented
 
     def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK):
+        assert len(hash) == self.hashlength, f"incorrect hash length for {self.__class__.__name__}()"
+
         self.hash = hash
         self.network = network
         self.pkscript = self._to_pkscript()
@@ -282,6 +286,8 @@ class BaseAddress(ABC):
 
 
 class LegacyAddress(BaseAddress, ABC):
+    hashlength = HASH160_LENGTH
+
     @classmethod
     def from_string(cls, string: str) -> 'LegacyAddress':
         d = b58decode(string.encode('utf8'))
@@ -291,6 +297,7 @@ class LegacyAddress(BaseAddress, ABC):
         type, network = PREFIXES['legacy_reversed'][p]
         assert d_sha256(p + h)[:4] == cs, f"address '{string}' checksum verification failed"
         assert type == cls.type
+        assert len(h) == cls.hashlength, f"incorrect {cls.__name__} address '{string}'"
         return cls(h, network)
 
     def _to_string(self) -> str:
@@ -327,10 +334,12 @@ class SegwitAddress(BaseAddress, ABC):
     def from_string(cls, string: str) -> 'SegwitAddress':
         network = get_address_network(string)
         assert network, 'failed to identify network (it can be specified)'
-        ver, hash = bech32.decode(PREFIXES['bech32'][network], string)
-        assert None not in [ver, hash], f"bech32 decode failed '{string}'"
+        ver, h = bech32.decode(PREFIXES['bech32'][network], string)
+        assert None not in [ver, h], f"bech32 decode failed '{string}'"
+        h = bytes(cast(list[int], h))
         assert ver == cls.version, f'{cls.__name__}() supports only witness version {cls.version} but {ver} received'
-        return cls(bytes(cast(list[int], hash)), network)
+        assert len(h) == cls.hashlength, f"incorrect {cls.__name__} address '{string}'"
+        return cls(h, network)
 
     def _to_string(self) -> str:
         s = bech32.encode(PREFIXES['bech32'][self.network], self.version, list(self.hash))
@@ -343,6 +352,7 @@ class SegwitAddress(BaseAddress, ABC):
 
 class P2WPKH(SegwitAddress):
     type = AddressType.P2WPKH
+    hashlength = HASH160_LENGTH
     version = SEGWIT_V0_WITVER
 
     @classmethod
@@ -353,11 +363,13 @@ class P2WPKH(SegwitAddress):
 
 class P2WSH(SegwitAddress):
     type = AddressType.P2WSH
+    hashlength = SHA256_LENGTH
     version = SEGWIT_V0_WITVER
 
 
 class P2TR(SegwitAddress):
     type = AddressType.P2TR
+    hashlength = SCHNORR_COMPRESSED_PUBKEY_LENGTH  # todo: not hash actually
     version = SEGWIT_V1_WITVER
 
     def _to_pkscript(self) -> Script:
@@ -396,10 +408,6 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
         5: (p2pkh, P2PKH, 2),
         3: (p2sh, P2SH, 1)
     }
-    segwit_script_lens: dict[int, type[SegwitAddress]] = {
-        20: P2WPKH,
-        32: P2WSH
-    }
 
     check = lambda _dict: all([script[index] == OP_CODES[value] for index, value in _dict.items()])
 
@@ -412,7 +420,9 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
     elif length == 2:  # segwit
         op, hs = script
         if op == OP_CODES['OP_0']:
-            return segwit_script_lens[len(hs)](hs)
+            for k in [P2WPKH, P2WSH]:
+                if len(hs) == k.hashlength:
+                    return k(hs)
 
         elif op == OP_CODES['OP_1']:
             return P2TR(hs)
