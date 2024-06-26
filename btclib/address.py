@@ -343,7 +343,7 @@ class SegwitAddress(BaseAddress, ABC):
 
 class P2WPKH(SegwitAddress):
     type = AddressType.P2WPKH
-    version = 0
+    version = SEGWIT_V0_WITVER
 
     @classmethod
     def from_pubkey(cls, key: PublicKey,
@@ -353,12 +353,12 @@ class P2WPKH(SegwitAddress):
 
 class P2WSH(SegwitAddress):
     type = AddressType.P2WSH
-    version = 0
+    version = SEGWIT_V0_WITVER
 
 
 class P2TR(SegwitAddress):
     type = AddressType.P2TR
-    version = 1
+    version = SEGWIT_V1_WITVER
 
     def _to_pkscript(self) -> Script:
         return Script('OP_1', self.hash)

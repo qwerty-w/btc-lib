@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Iterable, Mapping, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
+from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
 
 from btclib.script import Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
