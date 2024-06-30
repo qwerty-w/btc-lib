@@ -338,7 +338,7 @@ class Script(list[inner_T]):
         if v := validate(instance): super().insert(index, v)
         self.unfreeze()
 
-    def copy(self) -> 'Script':
+    def copy(self) -> Self:
         return type(self)(*self, validation=False)
 
     def serialize(self, *, segwit: bool = False) -> bytes:
@@ -368,7 +368,7 @@ class Script(list[inner_T]):
             return False
         return super().__eq__(other)
 
-    def __add__(self, instance: 'Script') -> 'Script':
+    def __add__(self, instance: 'Script') -> Self:
         if not isinstance(instance, Script):
             raise TypeError(f'can only concatenate Script (not "{type(instance).__name__}") to Script')
         return type(self)(*self, *instance, validation=False)

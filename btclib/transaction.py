@@ -304,7 +304,7 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
             self._address = None
 
     @classmethod
-    def from_address(cls, address: BaseAddress, amount: int) -> 'Output':
+    def from_address(cls, address: BaseAddress, amount: int) -> Self:
         return cls(address.pkscript, amount)
 
     def __repr__(self):
@@ -678,7 +678,7 @@ class Transaction(RawTransaction):
         )
 
     @classmethod
-    def deserialize(cls, raw: bytes, amounts: list[int]) -> RawTransaction:
+    def deserialize(cls, raw: bytes, amounts: list[int]) -> 'Transaction':
         """
         :param amounts: Amounts for each input
         """
