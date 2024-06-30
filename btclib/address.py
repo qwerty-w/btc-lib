@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Optional, cast
+from typing import Self, Optional, cast
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
@@ -31,7 +31,7 @@ class PrivateKey:
         )
 
     @classmethod
-    def from_wif(cls, wif: str) -> 'PrivateKey':
+    def from_wif(cls, wif: str) -> Self:
         data = b58decode(wif.encode('utf8'))
         key = data[:-4]
         checksum = data[-4:]
@@ -123,7 +123,7 @@ class PublicKey:
         self.compressed = compressed
 
     @classmethod
-    def from_bytes(cls, b: bytes, network: NetworkType = DEFAULT_NETWORK) -> 'PublicKey':
+    def from_bytes(cls, b: bytes, network: NetworkType = DEFAULT_NETWORK) -> Self:
         prefix, key = b[:1], b[1:]
         assert len(key) in [32, 64], f'incorrect public key length ({len(key)})'
 
@@ -141,7 +141,7 @@ class PublicKey:
 
     @classmethod
     def from_signed_message(cls, base64sig: str, message: str,
-                            network: NetworkType = DEFAULT_NETWORK) -> 'PublicKey':
+                            network: NetworkType = DEFAULT_NETWORK) -> Self:
         b = base64.b64decode(base64sig.encode('utf8'))
         assert len(b) == 65, f'decoded signature length should equals 65, but {len(b)} received'
 
@@ -258,10 +258,10 @@ class BaseAddress(ABC):
 
     @classmethod
     @abstractmethod
-    def from_string(cls, string: str) -> 'BaseAddress':
+    def from_string(cls, string: str) -> Self:
         ...
 
-    def change_network(self, network: Optional[NetworkType] = None) -> 'BaseAddress':
+    def change_network(self, network: Optional[NetworkType] = None) -> Self:
         return self if network == self.network else type(self)(
             self.hash,
             network=self.network.toggle() if network is None else network
@@ -289,7 +289,7 @@ class LegacyAddress(BaseAddress, ABC):
     hashlength = HASH160_LENGTH
 
     @classmethod
-    def from_string(cls, string: str) -> 'LegacyAddress':
+    def from_string(cls, string: str) -> Self:
         d = b58decode(string.encode('utf8'))
         # prefix, hash, checksum
         p, h, cs = d[:1], d[1:-4], d[-4:]
@@ -331,7 +331,7 @@ class SegwitAddress(BaseAddress, ABC):
         super().__init__(hash, network)
 
     @classmethod
-    def from_string(cls, string: str) -> 'SegwitAddress':
+    def from_string(cls, string: str) -> Self:
         network = get_address_network(string)
         assert network, 'failed to identify network (it can be specified)'
         ver, h = bech32.decode(PREFIXES['bech32'][network], string)
