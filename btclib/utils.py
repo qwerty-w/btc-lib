@@ -184,42 +184,42 @@ class varint(int):
                              fdc003/4dc003          fc2ed1a0fc2ed1a0fc2ed1a0fc2ed1a0 * 60
                    <segwit/non-segwit data size int>               <data>
 
-         return   ->    (int(fdc003/4dc003)    ,    fc2ed1a0fc2ed1a0fc2ed1a0fc2ed1a0 * 60
+         return   ->    int(fdc003/4dc003)    ,    fc2ed1a0fc2ed1a0fc2ed1a0fc2ed1a0 * 60
                    <segwit/non-segwit data size int>          <raw_data[size:]>
 
         """
         # pop fist byte
-        first_byte = raw_data[0:1]
-        first_byte_int = first_byte[0]
+        fb = raw_data[:1]
+        fbint = fb[0]
         raw_data = raw_data[1:]
 
-        if first_byte_int > 78:
+        if fbint > 0x4e:
             increased_separator = True
 
-        if first_byte_int < (253 if increased_separator else 76):
-            return cls(first_byte_int), raw_data
+        if fbint < (0xfd if increased_separator else 0x4c):
+            return cls(fbint), raw_data
 
-        int_size = SEPARATORS['increased' if increased_separator else 'default'][first_byte]
-        return cls(bytes2int(raw_data[:int_size], byteorder)), raw_data[int_size:]
+        sizeint = SEPARATORS['increased' if increased_separator else 'default'][fb]
+        return cls(bytes2int(raw_data[:sizeint], byteorder)), raw_data[sizeint:]
 
     def pack(self, byteorder: byteorder_T = 'little', *, increased_separator: bool = True) -> bytes:
-        size_bytes = int2bytes(self, byteorder)
+        sizeb = int2bytes(self, byteorder)
 
         if self < (253 if increased_separator else 76):
-            return size_bytes
+            return sizeb
 
-        int_size = len(size_bytes)
+        sizeint = len(sizeb)
 
-        if int_size > (8 if increased_separator else 4):
+        if sizeint > (8 if increased_separator else 4):
             raise ValueError(f'int too large for pack ({self}, increased_separator={increased_separator})')
 
         separator = b''
         for new_size, sep in SEPARATORS_REVERSED['increased' if increased_separator else 'default'].items():
-            if int_size <= new_size:
-                int_size, separator = new_size, sep
+            if sizeint <= new_size:
+                sizeint, separator = new_size, sep
                 break
 
-        return separator + self.to_bytes(int_size, byteorder)
+        return separator + self.to_bytes(sizeint, byteorder)
 
 
 def r160(d: bytes) -> bytes:
@@ -260,12 +260,12 @@ def bytes2int(value: bytes, byteorder: byteorder_T = 'big', *, signed: bool = Fa
 
 def get_magic_hash(message: str) -> bytes:
     pref = b'Bitcoin Signed Message:\n'
-    message_b = message.encode('utf8')
+    messageb = message.encode('utf8')
     return d_sha256(b''.join([
         int2bytes(len(pref)),
         pref,
         int2bytes(len(message)),
-        message_b
+        messageb
     ]))
 
 
@@ -297,12 +297,12 @@ def get_address_type(address: str) -> Optional[AddressType]:
 
 
 def validate_address(address: str, address_type: AddressType, address_network: NetworkType) -> bool:
-    real_type = get_address_type(address)
+    rtype = get_address_type(address)  # right type
 
-    if real_type != address_type or get_address_network(address) != address_network:
+    if rtype != address_type or get_address_network(address) != address_network:
         return False
 
-    if real_type in [AddressType.P2PKH, AddressType.P2SH_P2WPKH]:
+    if rtype in [AddressType.P2PKH, AddressType.P2SH_P2WPKH]:
         if not 26 <= len(address) <= 35:
             return False
 
@@ -315,11 +315,11 @@ def validate_address(address: str, address_type: AddressType, address_network: N
         if h[:4] != checksum:
             return False
 
-    elif real_type == AddressType.P2WPKH:
+    elif rtype == AddressType.P2WPKH:
         ver, prog = bech32.decode(PREFIXES['bech32'][address_network], address)
         return ver == SEGWIT_V0_WITVER and prog is not None
 
-    elif real_type in [AddressType.P2WSH, AddressType.P2TR]:
+    elif rtype in [AddressType.P2WSH, AddressType.P2TR]:
         ... # already decoded and validated in get_address_type
 
     else:
@@ -347,5 +347,4 @@ def pprint_class(class_or_instance: type | Any,
         *(f'{pv(v)}' for v in args),
         *(f'{k}={pv(v)}' for k, v in kwargs.items())
     ])
-
     return f'{name}{f'.{classmethod}' if classmethod else ''}({akw})'
