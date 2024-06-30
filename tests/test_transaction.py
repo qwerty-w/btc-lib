@@ -230,13 +230,11 @@ class TestTransaction:
         assert d.locktime == tx.json['locktime']
         assert d.serialize().hex() == tx.json['serialized']
 
-    def test_coinbase_serialize_deserialize(self):
-        coinbase = txobj.loaded['coinbase']
-
-        for jtx in coinbase:
-            r = RawTransaction.deserialize(bytes.fromhex(jtx['serialized']))
-            assert r.serialize().hex() == jtx['serialized']
-            assert r.is_coinbase()
-            assert isinstance(r.inputs[0], CoinbaseInput)
-            assert r.inputs[0].parse_height() == jtx['blockheight']
-            assert r.id.hex() == jtx['id']
+    @pytest.mark.parametrize('cjtx', txobj.loaded['coinbase'])
+    def test_coinbase_serialize_deserialize(self, cjtx):
+        r = RawTransaction.deserialize(bytes.fromhex(cjtx['serialized']))
+        assert r.serialize().hex() == cjtx['serialized']
+        assert r.is_coinbase()
+        assert isinstance(r.inputs[0], CoinbaseInput)
+        assert r.inputs[0].parse_height() == cjtx['blockheight']
+        assert r.id.hex() == cjtx['id']
