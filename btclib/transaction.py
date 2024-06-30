@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overload, Literal
 
-from btclib.script import Script
+from btclib.script import opcode, Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
                          ioList, TypeConverter, uint32, sint64, varint, d_sha256, op_hash160, \
                          bytes2int, pprint_class
@@ -214,7 +214,7 @@ class CoinbaseInput(UnsignableInput):
         Try to parse height in coinbase script, it's possible for blocks with version 2 and more (bip-0034).
         For blocks with ver < 2 returns wrong value.
         """
-        return bytes2int(self.script[0], 'little')  # todo: maybe prevent indexerror?
+        return bytes2int(self.script[0], 'little')  # type: ignore todo: maybe prevent indexerror?
 
     def as_dict(self) -> InputDict[str]:
         return RawInput.as_dict(self)
@@ -253,14 +253,14 @@ class Input(UnsignableInput):
             raise ValueError(f'received tx has no input {repr(self)}') from None
 
         if isinstance(self.address, P2WSH):
-            witness = Script('OP_1', self.private.public.to_bytes().hex(), 'OP_1', 'OP_CHECKMULTISIG')
+            witness = Script(opcode.OP_1, self.private.public.to_bytes().hex(), opcode.OP_1, opcode.OP_CHECKMULTISIG)
             hash4sign = tx.get_hash4sign(index, witness, segwit=True)
             sig = self.private.sign_tx(hash4sign)
-            self.witness = Script('OP_0', sig, witness.serialize().hex())
+            self.witness = Script(b'', sig, witness.serialize().hex())
             return
 
         pb_ophash160 = op_hash160(self.private.public.to_bytes())
-        script4hash = Script('OP_DUP', 'OP_HASH160', pb_ophash160, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        script4hash = Script(opcode.OP_DUP, opcode.OP_HASH160, pb_ophash160, opcode.OP_EQUALVERIFY, opcode.OP_CHECKSIG)
         hash4sign = tx.get_hash4sign(index, script4hash, segwit=not isinstance(self.address, P2PKH))
         sig = Script(self.private.sign_tx(hash4sign), self.private.public.to_bytes().hex())
 
@@ -272,7 +272,7 @@ class Input(UnsignableInput):
                 if self.private.public.change_network(self.address.network).get_address(AddressType.P2SH_P2WPKH) != self.address:
                     raise TypeError('from P2SH addresses default_sign supports P2SH-P2WPKH input only, but other type received')
 
-                self.script = Script(Script('OP_0', pb_ophash160).serialize().hex())
+                self.script = Script(Script(opcode.OP_0, pb_ophash160).serialize().hex())
                 self.witness = sig
 
             case P2WPKH():
