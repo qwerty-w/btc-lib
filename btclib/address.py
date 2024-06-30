@@ -9,10 +9,10 @@ from base58check import b58encode, b58decode
 from sympy import sqrt_mod
 
 from btclib import bech32
-from btclib.script import Script
+from btclib.script import opcode, Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, \
                          HASH160_LENGTH, SHA256_LENGTH, SCHNORR_COMPRESSED_PUBKEY_LENGTH, \
-                         DEFAULT_NETWORK, AddressType, NetworkType, OP_CODES
+                         DEFAULT_NETWORK, AddressType, NetworkType
 from btclib.utils import sha256, d_sha256, get_address_network, \
     get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
 
@@ -193,11 +193,11 @@ class PublicKey:
                 }[type].from_pubkey(self, network=self.network)
 
             case AddressType.P2SH_P2WPKH:
-                script = Script('OP_0', op_hash160(self.to_bytes()))
+                script = Script(opcode.OP_0, op_hash160(self.to_bytes()))
                 return P2SH(op_hash160(script.serialize()), self.network)
 
             case AddressType.P2WSH:
-                script = Script('OP_1', self.to_bytes(), 'OP_1', 'OP_CHECKMULTISIG')
+                script = Script(opcode.OP_1, self.to_bytes(), opcode.OP_1, opcode.OP_CHECKMULTISIG)
                 return P2WSH(sha256(script.serialize()), network=self.network)
 
             case _:
@@ -314,14 +314,14 @@ class P2PKH(LegacyAddress):
         return cls(op_hash160(key.to_bytes()), network)
 
     def _to_pkscript(self) -> Script:
-        return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
+        return Script(opcode.OP_DUP, opcode.OP_HASH160, self.hash, opcode.OP_EQUALVERIFY, opcode.OP_CHECKSIG)
 
 
 class P2SH(LegacyAddress):
     type = AddressType.P2SH_P2WPKH
 
     def _to_pkscript(self) -> Script:
-        return Script('OP_HASH160', self.hash, 'OP_EQUAL')
+        return Script(opcode.OP_HASH160, self.hash, opcode.OP_EQUAL)
 
 
 class SegwitAddress(BaseAddress, ABC):
@@ -347,7 +347,7 @@ class SegwitAddress(BaseAddress, ABC):
         return s
 
     def _to_pkscript(self) -> Script:
-        return Script('OP_0', self.hash)
+        return Script(opcode.OP_0, self.hash)
 
 
 class P2WPKH(SegwitAddress):
@@ -373,7 +373,7 @@ class P2TR(SegwitAddress):
     version = SEGWIT_V1_WITVER
 
     def _to_pkscript(self) -> Script:
-        return Script('OP_1', self.hash)
+        return Script(opcode.OP_1, self.hash)
 
 
 def from_string(address: str) -> BaseAddress:
@@ -394,37 +394,39 @@ def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT
     length = len(script)
 
     p2pkh = {
-        0: 'OP_DUP',
-        1: 'OP_HASH160',
-        3: 'OP_EQUALVERIFY',
-        4: 'OP_CHECKSIG'
+        0: opcode.OP_DUP,
+        1: opcode.OP_HASH160,
+        3: opcode.OP_EQUALVERIFY,
+        4: opcode.OP_CHECKSIG
     }
     p2sh = {
-        0: 'OP_HASH160',
-        -1: 'OP_EQUAL'
+        0: opcode.OP_HASH160,
+        -1: opcode.OP_EQUAL
     }
 
-    default_script_lens: dict[int, tuple[dict[int, str], type[LegacyAddress], int]] = {
+    default_script_lens: dict[int, tuple[dict[int, opcode], type[LegacyAddress], int]] = {
         5: (p2pkh, P2PKH, 2),
         3: (p2sh, P2SH, 1)
     }
 
-    check = lambda _dict: all([script[index] == OP_CODES[value] for index, value in _dict.items()])
+    check = lambda _dict: all([script[i] == op for i, op in _dict.items()])
 
     if default_script_lens.get(length) is not None:  # if p2pkh/p2sh address
         to_check, cls, hash_index = default_script_lens[length]
+        hs = script[hash_index]
 
-        if check(to_check):
-            return cls(script[hash_index], network)
+        if check(to_check) and isinstance(hs, bytes):
+            return cls(hs, network)
 
     elif length == 2:  # segwit
         op, hs = script
-        if op == OP_CODES['OP_0']:
+        assert isinstance(hs, bytes), 'witness program type must be bytes'
+        if op == opcode.OP_0:
             for k in [P2WPKH, P2WSH]:
                 if len(hs) == k.hashlength:
                     return k(hs)
 
-        elif op == OP_CODES['OP_1']:
+        elif op == opcode.OP_1:
             return P2TR(hs)
 
     raise ValueError(f"unsupported pkscript '{pkscript}'")
