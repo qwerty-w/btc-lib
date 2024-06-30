@@ -19,6 +19,7 @@ class ServiceError(Exception):
     def __str__(self) -> str:
         return self.message
 
+
 @dataclass
 class NetworkError(Exception):
     api: 'BaseAPI'
