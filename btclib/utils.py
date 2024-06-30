@@ -199,8 +199,8 @@ class varint(int):
         if fbint < (0xfd if increased_separator else 0x4c):
             return cls(fbint), raw_data
 
-        sizeint = SEPARATORS['increased' if increased_separator else 'default'][fb]
-        return cls(bytes2int(raw_data[:sizeint], byteorder)), raw_data[sizeint:]
+        sizelength = SEPARATORS['increased' if increased_separator else 'default'][fb]
+        return cls(bytes2int(raw_data[:sizelength], byteorder)), raw_data[sizelength:]
 
     def pack(self, byteorder: byteorder_T = 'little', *, increased_separator: bool = True) -> bytes:
         sizeb = int2bytes(self, byteorder)
@@ -208,18 +208,18 @@ class varint(int):
         if self < (253 if increased_separator else 76):
             return sizeb
 
-        sizeint = len(sizeb)
+        sizelength = len(sizeb)
 
-        if sizeint > (8 if increased_separator else 4):
+        if sizelength > (8 if increased_separator else 4):
             raise ValueError(f'int too large for pack ({self}, increased_separator={increased_separator})')
 
         separator = b''
         for new_size, sep in SEPARATORS_REVERSED['increased' if increased_separator else 'default'].items():
-            if sizeint <= new_size:
-                sizeint, separator = new_size, sep
+            if sizelength <= new_size:
+                sizelength, separator = new_size, sep
                 break
 
-        return separator + self.to_bytes(sizeint, byteorder)
+        return separator + self.to_bytes(sizelength, byteorder)
 
 
 def r160(d: bytes) -> bytes:
