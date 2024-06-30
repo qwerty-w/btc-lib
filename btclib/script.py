@@ -138,8 +138,8 @@ class opcode(IntEnum):
     OP_NOP8 = 0xb7
     OP_NOP9 = 0xb8
     OP_NOP10 = 0xb9
+    OP_CHECKSIGADD = 0xba
 
-    OP_RETURN_186 = 0xba
     OP_RETURN_187 = 0xbb
     OP_RETURN_188 = 0xbc
     OP_RETURN_189 = 0xbd
