@@ -6,7 +6,6 @@ from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
 from base58check import b58encode, b58decode
-from sympy import sqrt_mod
 
 from btclib import bech32
 from btclib.script import opcode, Script
@@ -132,12 +131,11 @@ class PublicKey:
 
         assert prefix in PREFIXES['public_key']['compressed'].values(), f'unknown compressed public ' \
                                                                         f'key prefix ({prefix})'
-        x_coord = bytes2int(key)
-        y_values: list[int] = sqrt_mod((x_coord ** 3 + 7) % P, P, all_roots=True)  # type: ignore
-        even, odd = sorted(y_values, key=lambda x: x % 2 != 0)
-        y_coord: int = even if prefix == PREFIXES['public_key']['compressed']['even'] else odd
-        k = x_coord.to_bytes(32) + y_coord.to_bytes(32)
-        return cls(VerifyingKey.from_string(k, SECP256k1), network, compressed=True)
+        x = bytes2int(key)
+        beta = pow(x ** 3 + 7, (P + 1) // 4, P)
+        y = P - beta if (beta + bytes2int(prefix)) % 2 else beta
+        b = x.to_bytes(32) + y.to_bytes(32)
+        return cls(VerifyingKey.from_string(b, SECP256k1), network, compressed=True)
 
     @classmethod
     def from_signed_message(cls, base64sig: str, message: str,

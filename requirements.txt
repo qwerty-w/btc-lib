@@ -1,5 +1,5 @@
 # This requirements.txt establishes clear (==) library dependencies,
-# the library is developed/testing on these versions of the modules. 
+# the library is developed/testing on these versions of the modules.
 # More free versions are specified in setup.py so as not to conflict
 # with already installed libraries. If you want to have clear versions
 # of dependencies, use requirements.txt, otherwise setup.py.
@@ -9,4 +9,3 @@ ecdsa==0.17.0
 pytest==8.1.1
 pytest-repeat==0.9.1
 requests==2.26.0
-sympy==1.12.1
