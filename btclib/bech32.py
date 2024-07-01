@@ -1,4 +1,4 @@
-# Copyright (c) 2017 Pieter Wuille
+# Copyright (c) 2017, 2020 Pieter Wuille
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,12 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-"""Reference implementation for Bech32 and segwit addresses."""
+"""Reference implementation for Bech32/Bech32m and segwit addresses."""
 
-from typing import Iterable, List, Optional, Tuple, Union
+
+from typing import Iterable, Optional
+from enum import Enum
 
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+BECH32M_CONST = 0x2bc830a3
+
+
+class Encoding(Enum):
+    """Enumeration type to list the various supported encodings."""
+    BECH32 = 1
+    BECH32M = 2
 
 
 def bech32_polymod(values: Iterable[int]) -> int:
@@ -38,49 +47,55 @@ def bech32_polymod(values: Iterable[int]) -> int:
     return chk
 
 
-def bech32_hrp_expand(hrp: str) -> List[int]:
+def bech32_hrp_expand(hrp: Iterable[str]) -> list[int]:
     """Expand the HRP into values for checksum computation."""
     return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
 
 
-def bech32_verify_checksum(hrp: str, data: Iterable[int]) -> bool:
+def bech32_verify_checksum(hrp: Iterable[str], data: list[int]) -> Optional[Encoding]:
     """Verify a checksum given HRP and converted data characters."""
-    return bech32_polymod(bech32_hrp_expand(hrp) + list(data)) == 1
+    const = bech32_polymod(bech32_hrp_expand(hrp) + data)
+    if const == 1:
+        return Encoding.BECH32
+    if const == BECH32M_CONST:
+        return Encoding.BECH32M
+    return None
 
 
-def bech32_create_checksum(hrp: str, data: Iterable[int]) -> List[int]:
+def bech32_create_checksum(hrp: Iterable[str], data: list[int], spec: Encoding) -> list[int]:
     """Compute the checksum values given HRP and data."""
-    values = bech32_hrp_expand(hrp) + list(data)
-    polymod = bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ 1
+    values = bech32_hrp_expand(hrp) + data
+    const = BECH32M_CONST if spec == Encoding.BECH32M else 1
+    polymod = bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ const
     return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
 
 
-def bech32_encode(hrp: str, data: Iterable[int]) -> str:
+def bech32_encode(hrp: str, data: list[int], spec: Encoding) -> str:
     """Compute a Bech32 string given HRP and data values."""
-    combined = list(data) + bech32_create_checksum(hrp, data)
-    return hrp + "1" + "".join([CHARSET[d] for d in combined])
+    combined = data + bech32_create_checksum(hrp, data, spec)
+    return hrp + '1' + ''.join([CHARSET[d] for d in combined])
 
 
-def bech32_decode(bech: str) -> Union[Tuple[None, None], Tuple[str, List[int]]]:
-    """Validate a Bech32 string, and determine HRP and data."""
-    if (any(ord(x) < 33 or ord(x) > 126 for x in bech)) or (
-        bech.lower() != bech and bech.upper() != bech
-    ):
-        return (None, None)
+def bech32_decode(bech: str, max_length: int = 90) -> tuple[None, None, None] | tuple[str, list[int], Encoding]:
+    """Validate a Bech32/Bech32m string, and determine HRP and data."""
+    if ((any(ord(x) < 33 or ord(x) > 126 for x in bech)) or
+            (bech.lower() != bech and bech.upper() != bech)):
+        return (None, None, None)
     bech = bech.lower()
-    pos = bech.rfind("1")
-    if pos < 1 or pos > 83 or pos + 7 > len(bech):  # or len(bech) > 90:
-        return (None, None)
-    if not all(x in CHARSET for x in bech[pos + 1 :]):
-        return (None, None)
+    pos = bech.rfind('1')
+    if pos < 1 or pos + 7 > len(bech) or len(bech) > max_length:
+        return (None, None, None)
+    if not all(x in CHARSET for x in bech[pos+1:]):
+        return (None, None, None)
     hrp = bech[:pos]
-    data = [CHARSET.find(x) for x in bech[pos + 1 :]]
-    if not bech32_verify_checksum(hrp, data):
-        return (None, None)
-    return (hrp, data[:-6])
+    data = [CHARSET.find(x) for x in bech[pos+1:]]
+    spec = bech32_verify_checksum(hrp, data)
+    if spec is None:
+        return (None, None, None)
+    return (hrp, data[:-6], spec)
 
 
-def convertbits(data: Iterable[int], frombits: int, tobits: int, pad: bool = True) -> Optional[List[int]]:
+def convertbits(data: Iterable[int], frombits: int, tobits: int, pad: bool = True) -> Optional[list[int]]:
     """General power-of-2 base conversion."""
     acc = 0
     bits = 0
@@ -103,12 +118,12 @@ def convertbits(data: Iterable[int], frombits: int, tobits: int, pad: bool = Tru
     return ret
 
 
-def decode(hrp: str, addr: str) -> Union[Tuple[None, None], Tuple[int, List[int]]]:
+def decode(hrp: str, addr: str) -> tuple[None, None] | tuple[int, list[int]]:
     """Decode a segwit address."""
-    hrpgot, data = bech32_decode(addr)
+    hrpgot, data, spec = bech32_decode(addr)  # type: ignore
     if hrpgot != hrp:
         return (None, None)
-    assert data is not None
+    data: list[int]
     decoded = convertbits(data[1:], 5, 8, False)
     if decoded is None or len(decoded) < 2 or len(decoded) > 40:
         return (None, None)
@@ -116,15 +131,15 @@ def decode(hrp: str, addr: str) -> Union[Tuple[None, None], Tuple[int, List[int]
         return (None, None)
     if data[0] == 0 and len(decoded) != 20 and len(decoded) != 32:
         return (None, None)
+    if data[0] == 0 and spec != Encoding.BECH32 or data[0] != 0 and spec != Encoding.BECH32M:
+        return (None, None)
     return (data[0], decoded)
 
 
-def encode(hrp: str, witver: int, witprog: Iterable[int]) -> Optional[str]:
+def encode(hrp: str, witver: int, witprog: list[int]) -> Optional[str]:
     """Encode a segwit address."""
-    five_bit_witprog = convertbits(witprog, 8, 5)
-    if five_bit_witprog is None:
-        return None
-    ret = bech32_encode(hrp, [witver] + five_bit_witprog)
+    spec = Encoding.BECH32 if witver == 0 else Encoding.BECH32M
+    ret = bech32_encode(hrp, [witver] + convertbits(witprog, 8, 5), spec)  # type: ignore
     if decode(hrp, ret) == (None, None):
         return None
     return ret

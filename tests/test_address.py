@@ -1,80 +1,92 @@
 import pytest
+from .conftest import pvobj, addrobj, msgobj, address_T
 from btclib.address import *
 
 
-@pytest.fixture(params=['pub', 'hash', 'string', 'scriptPubKey'])  # address instance from hash/pub
-def address(request, unit, address_type):
+@pytest.fixture(params=['pub', 'hash', 'string', 'pkscript'])  # address instance from hash/pub
+def address(request, pv: pvobj, address_type: address_T) -> addrobj:
     """
     It differs from the "address" fixture in conftest.py in that it has parameterization "from hash / pub".
     Has the same name for convenience.
     """
-    address = unit[address_type]
-    network = 'mainnet'
-    ins = unit.pub.instance.get_address(address_type, network)
+    json = pv.json[address_type.value]
+    network = NetworkType.MAIN
+    address = addrobj(json, address_type, pv)
 
     match request.param:
+        case 'pub':
+            ins = address.ins
+
         case 'hash':
-            ins = type(ins).from_hash(address.hash, network)
+            ins = type(address.ins)(bytes.fromhex(json['hash']), network=network)
 
         case 'string':
-            ins = Address(address.string[network])
+            ins = from_string(json['string'][network.value])
 
-        case 'scriptPubKey':
-            ins = Address.from_script_pub_key(address.script_pub_key, network)
+        case 'pkscript':
+            ins = from_pkscript(json['pkscript'], network)
 
-    address.set_data({'instance': ins})
+        case _:
+            raise Exception()
+
+    address.ins = ins
     return address
 
 
 class TestPrivatePublicKey:
-    def test_private_key_creation(self, unit, compressed, network):  # test PrivateKey._from_wif
-        instance = PrivateKey(unit.pv.wif[compressed.string][network])
+    def test_private_key_from_bytes(self, pv: pvobj):
+        assert pv.ins.key.to_string().hex() == pv.json['pv']['hex']
 
-        assert instance.to_bytes() == unit.pv.bytes
+    def test_private_key_from_wif(self, pv: pvobj, compressed, network):
+        assert PrivateKey.from_wif(pv.json['pv']['wif'][compressed.string][network.value]).key.to_string().hex() == pv.json['pv']['hex']
 
-    def test_private_key_to_wif(self, unit, compressed, network):
-        wif = unit.pv.wif[compressed.string][network]
-        instance = PrivateKey(wif)
+    def test_private_key_to_wif(self, pv: pvobj, compressed, network):
+        assert pv.ins.to_wif(network, pubkey_compressed=compressed.bool) == pv.json['pv']['wif'][compressed.string][network.value]
 
-        assert instance.to_wif(network, compressed=compressed.bool) == wif
+    def test_private_key_sign_message(self, message: msgobj):
+        c = message.pv.pubins.compressed
+        message.pv.pubins.compressed = message.json['compressed']
+        assert message.pv.ins.sign_message(message.json['string']) == message.json['sig']
+        message.pv.pubins.compressed = c
 
-    def test_private_key_sign_message(self, message):
-        assert message.unit.pv.instance.sign_message(message.string, compressed=message.compressed) == message.sig
+    def test_pub_key_creation(self, pv: pvobj, compressed):
+        b = bytes.fromhex(pv.json['pub']['hex'][compressed.string])
+        pub = PublicKey.from_bytes(b)
+        assert pub.key.to_string() == pv.pubins.key.to_string()
+        assert pub.to_bytes() == b
 
-    def test_pub_key_creation(self, unit, compressed):
-        assert unit.pub.instance.bytes == unit.pub.bytes == PublicKey(unit.pub.hex[compressed.string]).bytes
+    def test_pub_key_to_bytes(self, pv: pvobj, compressed):
+        assert pv.pubins.change_compression(compressed.bool).to_bytes().hex() == pv.json['pub']['hex'][compressed.string]
 
-    def test_pub_key_to_hex(self, unit, compressed):
-        assert unit.pub.instance.to_hex(compressed=compressed.bool) == unit.pub.hex[compressed.string]
+    def test_pub_key_ophash160(self, pv: pvobj, compressed):
+        assert op_hash160(pv.pubins.change_compression(compressed.bool).to_bytes()).hex() == pv.json['pub']['hash160'][compressed.string]
 
-    def test_pub_key_hash160(self, unit, compressed):
-        assert unit.pub.instance.get_hash160(compressed=compressed.bool) == unit.pub.hash160[compressed.string]
+    def test_pub_key_from_signed_message(self, message: msgobj):
+        assert PublicKey.from_signed_message(message.json['sig'], message.json['string']).key.to_string() == message.pv.pubins.key.to_string()
 
-    def test_pub_key_from_signed_message(self, message):
-        assert PublicKey.from_signed_message(message.sig, message.string).bytes == message.unit.pub.bytes
+    def test_pub_key_verify_message(self, message: msgobj):
+        assert message.pv.pubins.verify_message(message.json['sig'], message.json['string'])
 
-    def test_pub_key_verify_message(self, message):
-        assert message.unit.pub.instance.verify_message(message.sig, message.string)
-
-    def test_pub_key_verify_message_for_address(self, message, address_type, network):
-        assert message.unit.pub.instance.verify_message_for_address(
-            message.sig,
-            message.string,
-            message.unit.pub.instance.get_address(address_type, network).string,
+    def test_pub_key_verify_message_for_address(self, message: msgobj, address_type, network):
+        assert message.pv.pubins.verify_message_for_address(
+            message.json['sig'],
+            message.json['string'],
+            message.pv.pubins.change_network(network).change_compression(message.json['compressed']).get_address(address_type),
         )
 
 
 class TestAddress:
-    def test_script_pub_key(self, address):
-        assert address.instance.script_pub_key.to_hex() == address.script_pub_key
+    def test_pkscript(self, address: addrobj):
+        assert address.ins.pkscript.serialize().hex() == address.json['pkscript']
 
-    def test_string(self, address, network):
-        ins = address.instance.change_network(network)
-        assert ins.string == address.string[network] == str(ins)
+    def test_string(self, address: addrobj, network):
+        ins = address.ins.change_network(network)
+        assert ins.string == str(ins) == address.json['string'][network.value]
 
-    def test_hash(self, address):
-        assert address.instance.hash == address.hash
+    def test_hash(self, address: addrobj):
+        assert address.ins.hash.hex() == address.json['hash']
 
-    def test_network(self, address):
-        # 'mainnet' because in address fixture instance init with "mainnet" network arg
-        assert address.instance.network == 'mainnet'
+    def test_network(self, address: addrobj):
+        # start with 'mainnet' cause in address fixture ins init with "mainnet"
+        assert address.ins.network == NetworkType.MAIN
+        assert address.ins.change_network().network == NetworkType.TEST
