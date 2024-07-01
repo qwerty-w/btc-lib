@@ -1,7 +1,9 @@
-import random
-from collections import namedtuple
 import pytest
+import random
+import hashlib
+from collections import namedtuple
 
+from .conftest import addrobj
 from btclib.utils import *
 
 
@@ -68,6 +70,9 @@ class IsIncreased:
         self.string = 'increased' if value else 'default'
         self.bool = value
 
+    def __repr__(self) -> str:
+        return str(self.bool)
+
 
 def _test_min_max_size(cls, values, level):
     value = values[0 if level == 'min' else 1]
@@ -89,7 +94,7 @@ def _test_min_max_size(cls, values, level):
 
 class TestUnsignedInt:
     def test_size(self, int_cls):
-        assert int(int_cls.__name__[-2:]) == int_cls.size * 8
+        assert int_cls.size * 8 == int(int_cls.__name__[-2:])
 
     def test_min_max_size(self, int_cls, level):
         assert _test_min_max_size(
@@ -104,7 +109,7 @@ class TestUnsignedInt:
 
     def test_unpack(self, randint, byteorder):
         integer, int_cls = randint.int, randint.cls
-        assert integer == int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder)
+        assert int_cls.unpack(integer.to_bytes(int_cls.size, byteorder, signed=int_cls._signed), byteorder) == integer
 
 
 def inc_id(item):
@@ -116,10 +121,10 @@ def increased(request):
     return request.param
 
 
-class TestDynamicInt:
+class TestVarInt:
     def test_min_max_size(self, level, increased):
         assert _test_min_max_size(
-            lambda v: dint(v).pack(increased_separator=increased.bool),
+            lambda v: varint(v).pack(increased_separator=increased.bool),
             int_ranges['unsigned'][64 if increased.bool else 32],
             level
         )
@@ -131,50 +136,57 @@ class TestDynamicInt:
         for sep, max_size in SEPARATORS[increased.string].items():
             for bsize in range(index, max_size + 1):
                 int_b = random.randbytes(bsize)
-                # fill with b'\x00' to max_size
+
+                # bsize can be 2 and in this case final number can be < 253
+                if not int_b[0]:
+                    int_b = bytes([random.randint(1, 255)]) + int_b[1:]
                 int_b = b''.join(b'\x00' for _ in range(max_size - bsize)) + int_b
                 int_b = int_b[::-1 if byteorder == 'little' else 1]
 
+                print('randbytes:', sep, max_size, bsize, int_b)
                 yield sep, int_b
 
             index = max_size + 1
 
     @staticmethod
     def _one_bsize_gen(sep_start, increased, byteorder):
+        sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
         for integer in range(sep_start, 256):
-            sep = SEPARATORS_REVERSED[increased.string][2 if increased.bool else 1]
-            int_b = ((b'\x00' if increased.bool else b'') + bytes([integer]))[::-1 if byteorder == 'little' else 1]
+            int_b = bytes([integer])
+            if increased.bool:
+                int_b = (b'\x00' + int_b)[::-1 if byteorder == 'little' else 1]
             yield sep, int_b
 
     def test_pack_one_bsize_separator(self, byteorder, increased):
         separators_start = 76 if not increased.bool else 253
 
         for integer in range(separators_start):
-            assert dint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
+            assert varint(integer).pack(byteorder, increased_separator=increased.bool) == bytes([integer])
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
-            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
-            assert sep + int_b == packed
+            packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
+            assert packed == sep + int_b
 
     def test_pack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
-            packed = dint(int.from_bytes(int_b, byteorder)).pack(byteorder, increased_separator=increased.bool)
+            packed = varint.from_bytes(int_b, byteorder).pack(byteorder, increased_separator=increased.bool)
 
-            assert sep + int_b == packed
+            print('vars:', ' / '.join(str(x) for x in [sep, int_b, packed]))
+            assert packed == sep + int_b
 
     def test_unpack_one_bsize_separator(self, increased, byteorder):
         separators_start = 76 if not increased.bool else 253
 
         for integer in range(separators_start):
-            assert dint.unpack(bytes([integer]), byteorder, increased_separator=increased.bool)[0] == integer
+            assert varint.unpack(bytes([integer]), byteorder, increased_separator=increased.bool)[0] == integer
 
         for sep, int_b in self._one_bsize_gen(separators_start, increased, byteorder):
-            unpacked = dint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
-            assert int.from_bytes(int_b, byteorder) == unpacked
+            unpacked = varint.unpack(sep + int_b, byteorder, increased_separator=increased.bool)[0]
+            assert unpacked == int.from_bytes(int_b, byteorder)
 
     def test_unpack_separators(self, increased, byteorder):
         for sep, int_b in self._bsize_gen(increased, byteorder):
-            out_int, _ = dint.unpack(
+            out_int, _ = varint.unpack(
                 sep + int_b,
                 byteorder,
                 increased_separator=increased.bool
@@ -185,7 +197,7 @@ class TestDynamicInt:
 @pytest.mark.repeat(10)
 def test_d_sha256():
     random_data = random.randbytes(64)
-    assert sha256(sha256(random_data).digest()).digest() == d_sha256(random_data)
+    assert d_sha256(random_data) == hashlib.sha256(hashlib.sha256(random_data).digest()).digest()
 
 
 def i2b_id(data):
@@ -201,16 +213,16 @@ def i2b_items(request, byteorder):
 
 def test_int2bytes_signed(i2b_items):
     (integer, integer_bytes), byteorder = i2b_items
-    assert integer_bytes == int2bytes(integer, byteorder, signed=True)
+    assert int2bytes(integer, byteorder, signed=True) == integer_bytes
 
 
 def test_bytes2int_signed(i2b_items):
     (integer, integer_bytes), byteorder = i2b_items
-    assert integer == bytes2int(integer_bytes, byteorder, signed=True)
+    assert bytes2int(integer_bytes, byteorder, signed=True) == integer
 
 
-def test_get_address_network_correct_data(address, network):
-    assert network == get_address_network(address.string[network])
+def test_get_address_network_correct_data(address: addrobj, network):
+    assert get_address_network(address.json['string'][network.value]) == network
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
@@ -218,18 +230,18 @@ def test_get_address_network_incorrect_data(incorrect_address):
     assert get_address_network(incorrect_address) is None
 
 
-def test_get_address_type(address, network):
-    assert get_address_type(address.string[network]) == address.instance.type
+def test_get_address_type(address: addrobj, network):
+    assert get_address_type(address.json['string'][network.value]) == address.type == address.ins.type
 
 
-def test_validate_address_correct_data(address, network):
-    assert validate_address(address.string[network], address.instance.type, network)
+def test_validate_address_correct_data(address: addrobj, network):
+    assert validate_address(address.json['string'][network.value], address.type, network)
 
 
 @pytest.mark.parametrize('incorrect_address', incorrect_addresses)
 def test_validate_address_incorrect_data(incorrect_address):
-    assert False is validate_address(
+    assert validate_address(
         incorrect_address,
-        random.choice(['P2PKH', 'P2SH', 'P2WSH', 'P2WPKH']),
-        random.choice(['mainnet', 'testnet'])
-    )
+        random.choice([AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH]),
+        random.choice([NetworkType.MAIN, NetworkType.TEST])
+    ) is False

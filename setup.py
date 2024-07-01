@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages  # type: ignore
 
 
 def get_version() -> str:
@@ -6,6 +6,8 @@ def get_version() -> str:
         for line in f:
             if line.startswith('__version__'):
                 return line.strip().split('= ')[-1].strip("'")
+
+    raise RuntimeError('__version__ not found')
 
 
 setup(

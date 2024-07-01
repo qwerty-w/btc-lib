@@ -1,8 +1,10 @@
-from btclib.address import PrivateKey, PublicKey, P2PKH, P2SH, P2WPKH, P2WSH, Address
-from btclib.transaction import Input, Output, Transaction, get_inputs
-from btclib.script import Script
-from btclib import bech32
-from btclib.services import NetworkAPI
+from btclib import bech32, utils
+from btclib.script import opcode, Script
+from btclib.service import Service
+from btclib.const import AddressType, NetworkType
+from btclib.address import PrivateKey, PublicKey, BaseAddress, P2PKH, P2SH, P2WPKH, P2WSH, P2TR
+from btclib.transaction import Block, Unspent, RawInput, UnsignableInput, CoinbaseInput, \
+    Input, Output, RawTransaction, Transaction, BroadcastedTransaction
 
 
-__version__ = '0.0.2'
+__version__ = '1.0.0'

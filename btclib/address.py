@@ -1,87 +1,77 @@
 import base64
+import hashlib
 from abc import ABC, abstractmethod
-from hashlib import sha256, new as hashlib_new
+from typing import Self, Optional, cast
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
 from base58check import b58encode, b58decode
-from sympy import sqrt_mod
 
-from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, DEFAULT_WITNESS_VERSION, DEFAULT_NETWORK
-from btclib.utils import d_sha256, get_address_network, validate_address, \
-    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class
-from btclib.script import Script
-from btclib.services import NetworkAPI, Unspent
-from btclib import exceptions
 from btclib import bech32
+from btclib.script import opcode, Script
+from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, \
+                         HASH160_LENGTH, SHA256_LENGTH, SCHNORR_COMPRESSED_PUBKEY_LENGTH, \
+                         DEFAULT_NETWORK, AddressType, NetworkType
+from btclib.utils import sha256, d_sha256, get_address_network, \
+    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
 
 
 class PrivateKey:
-    def __init__(self, wif: str = None):
-        if hasattr(self, '_from_bytes'):
-            key = SigningKey.from_string(self._from_bytes, SECP256k1)
-
-        elif wif is None:
-            key = SigningKey.generate(SECP256k1)
-
-        else:
-            key = self._from_wif(wif)
-
-        self.key = key
-        self.pub = self._get_public_key()
-        self.bytes = self.key.to_string()
-
-    @staticmethod
-    def _from_wif(wif: str) -> SigningKey:
-        data = b58decode(wif.encode('utf-8'))
-        key = data[:-4]
-        checksum = data[-4:]
-
-        h = d_sha256(key)
-        if not checksum == h[0:4]:
-            raise exceptions.InvalidWIF(wif)
-
-        key = key[1:]  # network
-        key = key[:-1] if len(key) > 32 else key
-
-        return SigningKey.from_string(key, SECP256k1)
+    def __init__(self,
+                 key: Optional[SigningKey] = None,
+                 pubkey_network: NetworkType = DEFAULT_NETWORK,
+                 *,
+                 pubkey_compressed: bool = True):
+        self.key = key if key else SigningKey.generate(SECP256k1)
+        self.public = PublicKey(
+            cast(VerifyingKey, self.key.get_verifying_key()),
+            network=pubkey_network,
+            compressed=pubkey_compressed
+        )
 
     @classmethod
-    def from_bytes(cls, pv_bytes: bytes):
-        ins = cls.__new__(cls)
-        ins._from_bytes = pv_bytes
-        ins.__init__()
-        del ins._from_bytes
-        return ins
+    def from_wif(cls, wif: str) -> Self:
+        data = b58decode(wif.encode('utf8'))
+        key = data[:-4]
+        checksum = data[-4:]
+        assert d_sha256(key)[:4] == checksum, 'wif checksum verification failed'
 
-    def to_wif(self, network: str = DEFAULT_NETWORK, *, compressed: bool = True) -> str:
-        data = PREFIXES['wif'][network] + self.key.to_string() + (b'\x01' if compressed else b'')
-        h = d_sha256(data)
-        checksum = h[0:4]
-        wif = b58encode(data + checksum)
+        p, key = key[:1], key[1:]
+        assert p in PREFIXES['wif_reversed'], f'unsupported wif prefix (0x{p.hex()})'
+        network = PREFIXES['wif_reversed'][p]
 
-        return wif.decode('utf-8')
+        if len(key) == 33:  # compressed
+            assert key[-1:] == b'\x01', f"incorrect compressed mark '{hex(key[-1])}'"
+            compressed = True
+            key = key[:-1]
 
-    def to_bytes(self) -> bytes:
-        return self.key.to_string()
+        elif len(key) == 32:
+            compressed = False
 
-    def _get_public_key(self) -> 'PublicKey':
-        return PublicKey('04' + self.key.get_verifying_key().to_string().hex())
+        else:
+            raise ValueError(f'incorrect private key length ({len(key)})')
 
-    def sign_message(self, message: str, *, compressed: bool = True) -> str:
+        return cls(SigningKey.from_string(key, SECP256k1), pubkey_network=network, pubkey_compressed=compressed)
+
+    @classmethod
+    def from_bytes(cls, b: bytes, pubkey_network: NetworkType = DEFAULT_NETWORK, pubkey_compressed: bool = True):
+        return cls(SigningKey.from_string(b, SECP256k1), pubkey_network, pubkey_compressed=pubkey_compressed)
+
+    def sign_message(self, message: str) -> str:
         digest = get_magic_hash(message)
-        sig = self.key.sign_digest_deterministic(digest, sha256, sigencode_string)
+        sig = self.key.sign_digest_deterministic(digest, hashlib.sha256, sigencode_string)
 
-        rec_id = 31 if compressed else 27
+        rec_id = 31 if self.public.compressed else 27
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
+        pub_b = self.public.key.to_string()
         for i, key in enumerate(keys):
-            if key.to_string() == self.pub.bytes:
+            if key.to_string() == pub_b:
                 rec_id += i
                 break
         return base64.b64encode(int2bytes(rec_id) + sig).decode()
 
     def sign_tx(self, tx_hash: bytes, sighash: int = SIGHASHES['all']) -> str:
-        sig = self.key.sign_digest_deterministic(tx_hash, sha256, sigencode_der)
+        sig = self.key.sign_digest_deterministic(tx_hash, hashlib.sha256, sigencode_der)
 
         pref = sig[0]
         full_len = sig[1]
@@ -108,300 +98,333 @@ class PrivateKey:
         new_sig = bytes([pref, full_len, der_type, r_len]) + r + bytes([der_type, s_len]) + new_s + bytes([sighash])
         return new_sig.hex()
 
+    def to_wif(self,
+               pubkey_network: Optional[NetworkType] = None,
+               *,
+               pubkey_compressed: Optional[bool] = None) -> str:
+        network = self.public.network if pubkey_network is None else pubkey_network
+        compressed = self.public.compressed if pubkey_compressed is None else pubkey_compressed
+
+        b = PREFIXES['wif'][network] + self.key.to_string()
+        if compressed:
+            b += b'\x01'
+        checksum = d_sha256(b)[:4]
+        return b58encode(b + checksum).decode('utf8')
+
+    def to_bytes(self) -> bytes:
+        return self.key.to_string()
+
 
 class PublicKey:
-    def __init__(self, pb_hex: str):
-        pb_bytes = bytes.fromhex(pb_hex)
-        fb, pb_bytes = pb_bytes[0], pb_bytes[1:]
-
-        if len(pb_bytes) <= 33:  # compressed check
-            x_coord = bytes2int(pb_bytes)
-            y_values = sqrt_mod((x_coord ** 3 + 7) % P, P, True)
-            even, odd = sorted(y_values, key=lambda x: x % 2 != 0)
-            y_coord = even if fb == 0x02 else odd if fb == 0x03 else None
-
-            if y_coord is None:
-                raise exceptions.InvalidCompressionFormat(pb_hex)
-            uncompressed_hex = '%0.64X%0.64X' % (x_coord, y_coord)
-            pb_bytes = bytes.fromhex(uncompressed_hex)
-
-        self.key = VerifyingKey.from_string(pb_bytes, SECP256k1)
-        self.bytes = self.key.to_string()
+    def __init__(self, key: VerifyingKey, network: NetworkType = DEFAULT_NETWORK, *, compressed: bool = True):
+        self.key = key
+        self.network = network
+        self.compressed = compressed
 
     @classmethod
-    def from_signed_message(cls, sig_b64: str, message: str):
-        sig = base64.b64decode(sig_b64.encode())
+    def from_bytes(cls, b: bytes, network: NetworkType = DEFAULT_NETWORK) -> Self:
+        prefix, key = b[:1], b[1:]
+        assert len(key) in [32, 64], f'incorrect public key length ({len(key)})'
 
-        if len(sig) != 65:
-            raise exceptions.InvalidSignatureLength(len(sig))
+        if prefix == PREFIXES['public_key']['uncompressed'] or len(key) == 64:
+            return cls(VerifyingKey.from_string(key, SECP256k1), compressed=False)
+
+        assert prefix in PREFIXES['public_key']['compressed'].values(), f'unknown compressed public ' \
+                                                                        f'key prefix ({prefix})'
+        x = bytes2int(key)
+        beta = pow(x ** 3 + 7, (P + 1) // 4, P)
+        y = P - beta if (beta + bytes2int(prefix)) % 2 else beta
+        b = x.to_bytes(32) + y.to_bytes(32)
+        return cls(VerifyingKey.from_string(b, SECP256k1), network, compressed=True)
+
+    @classmethod
+    def from_signed_message(cls, base64sig: str, message: str,
+                            network: NetworkType = DEFAULT_NETWORK) -> Self:
+        b = base64.b64decode(base64sig.encode('utf8'))
+        assert len(b) == 65, f'decoded signature length should equals 65, but {len(b)} received'
 
         digest = get_magic_hash(message)
-        rec_id, sig = sig[0], sig[1:]
+        recid, sig = b[0], b[1:]
 
-        if 27 <= rec_id <= 30:
-            rec_id -= 27
+        if 27 <= recid <= 30:
+            recid -= 27
+            compressed = False
 
-        elif 31 <= rec_id <= 34:
-            rec_id -= 31
+        elif 31 <= recid <= 34:
+            recid -= 31
+            compressed = True
 
         else:
-            raise exceptions.InvalidRecoveryID(rec_id)
+            raise ValueError(f'recovery id should be 27 <= rec_id <= 34, but {recid} received')
 
         keys = VerifyingKey.from_public_key_recovery_with_digest(sig, digest, SECP256k1)
-        return cls('04' + keys[rec_id].to_string().hex())
+        return cls(keys[recid], network=network, compressed=compressed)
+
+    def change_compression(self, compressed: Optional[bool] = None) -> 'PublicKey':
+        return self if self.compressed == compressed else PublicKey(
+            self.key,
+            self.network,
+            compressed=not self.compressed if compressed is None else compressed
+        )
+
+    def change_network(self, network: Optional[NetworkType] = None) -> 'PublicKey':
+        return self if network == self.network else PublicKey(
+            self.key,
+            self.network.toggle() if network is None else network,
+            compressed=self.compressed
+        )
+
+    def get_address(self, type: AddressType) -> 'BaseAddress':
+        cls = {
+            AddressType.P2PKH: P2PKH,
+            AddressType.P2SH_P2WPKH: P2SH,
+            AddressType.P2WPKH: P2WPKH,
+            AddressType.P2WSH: P2WSH
+        }.get(type)
+        assert cls, f"unknown address type '{type}'"
+
+        match type:
+            case AddressType.P2PKH | AddressType.P2WPKH:
+                return {
+                    AddressType.P2PKH: P2PKH,
+                    AddressType.P2WPKH: P2WPKH
+                }[type].from_pubkey(self, network=self.network)
+
+            case AddressType.P2SH_P2WPKH:
+                script = Script(opcode.OP_0, op_hash160(self.to_bytes()))
+                return P2SH(op_hash160(script.serialize()), self.network)
+
+            case AddressType.P2WSH:
+                script = Script(opcode.OP_1, self.to_bytes(), opcode.OP_1, opcode.OP_CHECKMULTISIG)
+                return P2WSH(sha256(script.serialize()), network=self.network)
+
+            case _:
+                raise TypeError(f"unknown address type '{type}'")
 
     @classmethod
-    def verify_message_for_address(cls, sig_b64: str, message: str, address: str) -> bool:
+    def verify_message_for_address(cls, base64sig: str, message: str, address: 'BaseAddress') -> bool:
         """
         WARNING! Default Bitcoin-Core verify message supports only P2PKH addresses. It's possible because
         one PublicKey -> one P2PKH addresses.
-        With segwit addresses and P2SH address it gets hard since one PublicKey -> not one P2SH/P2WPKH/P2WSH address.
-        But verify_message_for_address anyway supports all address types, it checks to
+        With segwit addresses and P2SH address it gets hard since one PublicKey -> not one P2SH/P2WPKH/P2WSH
+        address. But verify_message_for_address anyway supports all address types, it checks to
         P2SH/P2WPKH/P2WSH address was generated with PublicKey.get_address algorithm.
-        This means that address could be obtained from same public key just by a different method and
-        verify_message_for_address will be return False, remember this (in this situation you can use
-        PublicKey.from_signed_message() and by self-checking find out that from obtained public key
-        can get needed address). More details: https://github.com/bitcoin/bitcoin/issues/10542
+        This means that address could be obtained from same public key just by a different method
+        (diffrent script hash) and verify_message_for_address will be return False, remember this
+        (in this situation you can use PublicKey.from_signed_message() and by self-checking find
+        out that from obtained public key can get needed address).
+        More details: https://github.com/bitcoin/bitcoin/issues/10542
 
-        :param sig_b64: String signature in base64 encoding.
+        :param base64sig: String signature in base64 encoding.
         :param message: Message for signature.
         :param address: Address for check
         """
-        pub = cls.from_signed_message(sig_b64, message)
-        network = get_address_network(address)
-        address_type = 'P2SH-P2WPKH' if (address_type := get_address_type(address)) == 'P2SH' else address_type
+        key = cls.from_signed_message(base64sig, message, address.network)
+        return key.get_address(address.type) == address
 
-        if pub.get_address(address_type, network).string == address:
-            return True
-
-        return False
-
-    def verify_message(self, sig_b64: str, message: str):
+    def verify_message(self, base64sig: str, message: str) -> bool:
         magic_hash = get_magic_hash(message)
         try:
             return self.key.verify_digest(
-                base64.b64decode(sig_b64.encode())[1:],
+                base64.b64decode(base64sig.encode('utf8'))[1:],
                 magic_hash,
                 sigdecode=sigdecode_string
             )
         except BadSignatureError:
             return False
 
-    def get_hash160(self, *, compressed: bool = True) -> str:
-        h = sha256(bytes.fromhex(self.to_hex(compressed=compressed))).digest()
-        ripemd160 = hashlib_new('ripemd160')
-        ripemd160.update(h)
-        return ripemd160.digest().hex()
+    def to_bytes(self) -> bytes:
+        b: bytes = self.key.to_string()
+        if not self.compressed:
+            return PREFIXES['public_key']['uncompressed'] + b
 
-    def to_hex(self, *, compressed: bool = True) -> str:
-        key_hex = self.key.to_string().hex()
-        key_hex = (('02' if int(key_hex[-2:], 16) % 2 == 0 else '03') + key_hex[:64]) if compressed else '04' + key_hex
-        return key_hex
-
-    def get_address(self, address_type: str, network: str = DEFAULT_NETWORK) -> 'AbstractBitcoinAddress':
-
-        if address_type in ('P2PKH', 'P2WPKH'):
-            cls = {'P2PKH': P2PKH, 'P2WPKH': P2WPKH}.get(address_type)
-            hash_ = self.get_hash160()
-
-        elif address_type == 'P2SH-P2WPKH':
-            cls = P2SH
-
-            ripemd160 = hashlib_new('ripemd160')
-            ripemd160.update(sha256(Script('OP_0', self.get_hash160()).to_bytes()).digest())
-            hash_ = ripemd160.digest().hex()
-
-        elif address_type == 'P2WSH':
-            cls = P2WSH
-            witness_script = Script('OP_1', self.to_hex(), 'OP_1', 'OP_CHECKMULTISIG').to_bytes()
-            hash_ = sha256(witness_script).digest().hex()
-
-        else:
-            raise exceptions.UnsupportedAddressType(address_type)
-
-        return cls.from_hash(hash_, network)
+        prefix = PREFIXES['public_key']['compressed']['even' if b[-1] % 2 == 0 else 'odd']
+        return prefix + b[:32]
 
 
-class AbstractBitcoinAddress(ABC):
-    @property
+class BaseAddress(ABC):
+    type: AddressType = NotImplemented
+    hashlength: int = NotImplemented
+
+    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK):
+        assert len(hash) == self.hashlength, f"incorrect hash length for {self.__class__.__name__}()"
+
+        self.hash = hash
+        self.network = network
+        self.pkscript = self._to_pkscript()
+        self.string = self._to_string()
+
+    @classmethod
     @abstractmethod
-    def type(self) -> str:
+    def from_string(cls, string: str) -> Self:
         ...
 
-    def __init__(self, address: str):
-        self.string = address
-        self.network: str = get_address_network(address)
+    def change_network(self, network: Optional[NetworkType] = None) -> Self:
+        return self if network == self.network else type(self)(
+            self.hash,
+            network=self.network.toggle() if network is None else network
+        )
 
-        if self.network is None or not validate_address(self.string, self.type, self.network):
-            raise exceptions.InvalidAddress(self.string, self.type, self.network)
+    @abstractmethod
+    def _to_pkscript(self) -> Script:
+        ...
 
-        self.hash = self._get_hash()
-        self.script_pub_key: Script = self._get_script_pub_key()
+    @abstractmethod
+    def _to_string(self) -> str:
+        ...
 
     def __str__(self):
         return self.string
 
     def __repr__(self):
-        return pprint_class(self, [self.__str__().__repr__()])
+        return pprint_class(self, [self.__str__().__repr__()], classmethod='from_string')
 
-    @abstractmethod
-    def from_hash(self, hash_: str, network: str, **kwargs) -> 'AbstractBitcoinAddress':
-        ...
-
-    def change_network(self, network: str = None) -> 'AbstractBitcoinAddress':
-        if network == self.network:
-            return self
-
-        cls = type(self)
-        network = network if network is not None else ('mainnet' if self.network == 'testnet' else 'testnet')
-        return cls.from_hash(self.hash, network)
-
-    def get_info(self) -> dict:
-        return getattr(NetworkAPI, 'get_address_info' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
-
-    def get_unspents(self) -> list[Unspent]:
-        return getattr(NetworkAPI, 'get_unspent' + ('_testnet' if self.network == 'testnet' else ''))(self.string)
-
-    @abstractmethod
-    def _get_hash(self) -> str:
-        ...
-
-    @abstractmethod
-    def _get_script_pub_key(self) -> Script:
-        ...
+    def __eq__(self, other: 'BaseAddress'):
+        return str(self) == str(other) if isinstance(other, BaseAddress) else NotImplemented
 
 
-class DefaultAddress(AbstractBitcoinAddress, ABC):
-    @classmethod
-    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK) -> 'DefaultAddress':
-        return cls(cls._b58encode(bytes.fromhex(hash_), network))
+class LegacyAddress(BaseAddress, ABC):
+    hashlength = HASH160_LENGTH
 
     @classmethod
-    def _get_prefix(cls, network: str):
-        return PREFIXES[cls.type][network]
+    def from_string(cls, string: str) -> Self:
+        d = b58decode(string.encode('utf8'))
+        # prefix, hash, checksum
+        p, h, cs = d[:1], d[1:-4], d[-4:]
+        assert p in PREFIXES['legacy_reversed'], "unknown prefix '{p}'"
+        type, network = PREFIXES['legacy_reversed'][p]
+        assert d_sha256(p + h)[:4] == cs, f"address '{string}' checksum verification failed"
+        assert type == cls.type
+        assert len(h) == cls.hashlength, f"incorrect {cls.__name__} address '{string}'"
+        return cls(h, network)
 
-    def _get_hash(self) -> str:
-        return self._b58decode(self.string)
-
-    @classmethod
-    def _b58encode(cls, data: bytes, network: str) -> str:
-        raw_address_bytes = cls._get_prefix(network) + data
-        raw_address_hash = d_sha256(raw_address_bytes)
-        address = b58encode(raw_address_bytes + raw_address_hash[0:4]).decode('utf-8')
-
-        return address
-
-    @staticmethod
-    def _b58decode(address: str) -> str:
-        hash160_bytes = b58decode(address.encode())[1:-4]
-        return hash160_bytes.hex()
+    def _to_string(self) -> str:
+        b = PREFIXES[self.type][self.network] + self.hash
+        cs = d_sha256(b)[:4]
+        return b58encode(b + cs).decode('utf8')
 
 
-class P2PKH(DefaultAddress):
-    type = 'P2PKH'
-
-    def _get_script_pub_key(self) -> Script:
-        return Script('OP_DUP', 'OP_HASH160', self.hash, 'OP_EQUALVERIFY', 'OP_CHECKSIG')
-
-
-class P2SH(DefaultAddress):
-    type = 'P2SH'
-
-    def _get_script_pub_key(self) -> Script:
-        return Script('OP_HASH160', self.hash, 'OP_EQUAL')
-
-
-class SegwitAddress(AbstractBitcoinAddress, ABC):
-    def __init__(self, address: str):
-        super().__init__(address)
-        self.version: int = self._bech32decode(address, self.network)[0]
+class P2PKH(LegacyAddress):
+    type = AddressType.P2PKH
 
     @classmethod
-    def from_hash(cls, hash_: str, network: str = DEFAULT_NETWORK, *,
-                  version: int = DEFAULT_WITNESS_VERSION) -> 'SegwitAddress':
-        return cls(cls._bech32encode(bytes.fromhex(hash_), network, version=version))
+    def from_pubkey(cls, key: PublicKey, network: NetworkType = DEFAULT_NETWORK):
+        return cls(op_hash160(key.to_bytes()), network)
 
-    def _get_hash(self) -> str:
-        _, int_list = self._bech32decode(self.string, self.network)
-        return bytes(int_list).hex()
+    def _to_pkscript(self) -> Script:
+        return Script(opcode.OP_DUP, opcode.OP_HASH160, self.hash, opcode.OP_EQUALVERIFY, opcode.OP_CHECKSIG)
 
-    def _get_script_pub_key(self) -> Script:
-        return Script('OP_0', self.hash)
 
-    @staticmethod
-    def _bech32encode(data: bytes, network: str, *, version: int) -> str:
-        return bech32.encode(PREFIXES['bech32'][network], version, list(data))
+class P2SH(LegacyAddress):
+    type = AddressType.P2SH_P2WPKH
 
-    @staticmethod
-    def _bech32decode(address: str, network: str) -> tuple:
-        return bech32.decode(PREFIXES['bech32'][network], address)
+    def _to_pkscript(self) -> Script:
+        return Script(opcode.OP_HASH160, self.hash, opcode.OP_EQUAL)
+
+
+class SegwitAddress(BaseAddress, ABC):
+    version: int = NotImplemented
+
+    def __init__(self, hash: bytes, network: NetworkType = DEFAULT_NETWORK):
+        super().__init__(hash, network)
+
+    @classmethod
+    def from_string(cls, string: str) -> Self:
+        network = get_address_network(string)
+        assert network, 'failed to identify network (it can be specified)'
+        ver, h = bech32.decode(PREFIXES['bech32'][network], string)
+        assert None not in [ver, h], f"bech32 decode failed '{string}'"
+        h = bytes(cast(list[int], h))
+        assert ver == cls.version, f'{cls.__name__}() supports only witness version {cls.version} but {ver} received'
+        assert len(h) == cls.hashlength, f"incorrect {cls.__name__} address '{string}'"
+        return cls(h, network)
+
+    def _to_string(self) -> str:
+        s = bech32.encode(PREFIXES['bech32'][self.network], self.version, list(self.hash))
+        assert s is not None, f"bech32 encode failed '{self.hash.hex()}'"
+        return s
+
+    def _to_pkscript(self) -> Script:
+        return Script(opcode.OP_0, self.hash)
 
 
 class P2WPKH(SegwitAddress):
-    type = 'P2WPKH'
+    type = AddressType.P2WPKH
+    hashlength = HASH160_LENGTH
+    version = SEGWIT_V0_WITVER
+
+    @classmethod
+    def from_pubkey(cls, key: PublicKey,
+                    network: NetworkType = DEFAULT_NETWORK):
+        return cls(op_hash160(key.to_bytes()), network)
 
 
 class P2WSH(SegwitAddress):
-    type = 'P2WSH'
+    type = AddressType.P2WSH
+    hashlength = SHA256_LENGTH
+    version = SEGWIT_V0_WITVER
 
 
-class Address:
-    def __new__(cls, address: str) -> AbstractBitcoinAddress:
-        """
-        Returns P2PKH/P2SH/P2WPKH/P2WSH instance. Instance of this itself class impossible to get.
-        """
-        addr_type = get_address_type(address)
+class P2TR(SegwitAddress):
+    type = AddressType.P2TR
+    hashlength = SCHNORR_COMPRESSED_PUBKEY_LENGTH  # todo: not hash actually
+    version = SEGWIT_V1_WITVER
 
-        addr_cls = {
-            'P2PKH': P2PKH,
-            'P2SH': P2SH,
-            'P2WPKH': P2WPKH,
-            'P2WSH': P2WSH
-        }.get(addr_type)
+    def _to_pkscript(self) -> Script:
+        return Script(opcode.OP_1, self.hash)
 
-        if addr_cls is None:
-            raise exceptions.InvalidAddress(address)
 
-        return addr_cls(address)
+def from_string(address: str) -> BaseAddress:
+    type = get_address_type(address)
+    cls = {
+        AddressType.P2PKH: P2PKH,
+        AddressType.P2SH_P2WPKH: P2SH,
+        AddressType.P2WPKH: P2WPKH,
+        AddressType.P2WSH: P2WSH,
+        AddressType.P2TR: P2TR
+    }.get(type)  # type: ignore
+    assert cls, f"unsupported address '{address}'"
+    return cls.from_string(address)
 
-    @staticmethod
-    def from_script_pub_key(data: Script | str, network: str = DEFAULT_NETWORK) -> AbstractBitcoinAddress:
-        script = data if isinstance(data, Script) else Script.from_raw(data)
-        script_len = len(script)
 
-        p2pkh = {
-            0: 'OP_DUP',
-            1: 'OP_HASH160',
-            3: 'OP_EQUALVERIFY',
-            4: 'OP_CHECKSIG'
-        }
-        p2sh = {
-            0: 'OP_HASH160',
-            -1: 'OP_EQUAL'
-        }
-        segwit = {
-            0: 'OP_0'
-        }
+def from_pkscript(pkscript: Script | bytes | str, network: NetworkType = DEFAULT_NETWORK) -> BaseAddress:
+    script = pkscript if isinstance(pkscript, Script) else Script.deserialize(pkscript)
+    length = len(script)
 
-        default_script_lens = {
-            5: (p2pkh, P2PKH, 2),
-            3: (p2sh, P2SH, 1),
-        }
-        segwit_script_lens = {
-            40: P2WPKH,
-            64: P2WSH
-        }
+    p2pkh = {
+        0: opcode.OP_DUP,
+        1: opcode.OP_HASH160,
+        3: opcode.OP_EQUALVERIFY,
+        4: opcode.OP_CHECKSIG
+    }
+    p2sh = {
+        0: opcode.OP_HASH160,
+        -1: opcode.OP_EQUAL
+    }
 
-        check = lambda dict_: all([script.script[index] == value for index, value in dict_.items()])
+    default_script_lens: dict[int, tuple[dict[int, opcode], type[LegacyAddress], int]] = {
+        5: (p2pkh, P2PKH, 2),
+        3: (p2sh, P2SH, 1)
+    }
 
-        if default_script_lens.get(script_len) is not None:  # if p2pkh/p2sh address
-            to_check, cls, hash_index = default_script_lens[script_len]
+    check = lambda _dict: all([script[i] == op for i, op in _dict.items()])
 
-            if check(to_check):
-                return cls.from_hash(script.script[hash_index], network)
+    if default_script_lens.get(length) is not None:  # if p2pkh/p2sh address
+        to_check, cls, hash_index = default_script_lens[length]
+        hs = script[hash_index]
 
-        elif script_len == 2 and check(segwit):  # if segwit address
-            hs = script.script[1]
-            return segwit_script_lens[len(hs)].from_hash(hs)
+        if check(to_check) and isinstance(hs, bytes):
+            return cls(hs, network)
 
-        raise exceptions.InvalidScriptPubKey(data)
+    elif length == 2:  # segwit
+        op, hs = script
+        assert isinstance(hs, bytes), 'witness program type must be bytes'
+        if op == opcode.OP_0:
+            for k in [P2WPKH, P2WSH]:
+                if len(hs) == k.hashlength:
+                    return k(hs)
+
+        elif op == opcode.OP_1:
+            return P2TR(hs)
+
+    raise ValueError(f"unsupported pkscript '{pkscript}'")
