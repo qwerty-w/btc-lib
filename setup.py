@@ -23,16 +23,16 @@ setup(
     license='MIT',
     keywords=[
         'bitcoin',
+        'blockchain',
         'library',
         'simple',
         'btc',
         'lib'
     ],
     install_requires=[
-        'base58check~=1.0',
-        'ecdsa~=0.17',
-        'sympy~=1.8',
-        'requests~=2.26',
+        'base58check~=1.0.2',
+        'ecdsa~=0.19',
+        'requests~=2.32',
     ],
-    python_requires='~=3.10'
+    python_requires='~=3.12'
 )

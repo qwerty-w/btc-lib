@@ -5,7 +5,7 @@
 # of dependencies, use requirements.txt, otherwise setup.py.
 
 base58check==1.0.2
-ecdsa==0.17.0
-pytest==8.1.1
-pytest-repeat==0.9.1
-requests==2.26.0
+ecdsa==0.19.0
+pytest==8.2.2
+pytest-repeat==0.9.3
+requests==2.32.3
