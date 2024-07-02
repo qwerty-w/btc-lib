@@ -34,5 +34,5 @@ setup(
         'ecdsa~=0.19',
         'requests~=2.32',
     ],
-    python_requires='~=3.12'
+    python_requires='>=3.12'
 )
