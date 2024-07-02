@@ -1,0 +1,26 @@
+[build-system]
+requires = [
+    "setuptools"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "btc-lib"
+description = "Simple Bitcoin Library"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    'base58check~=1.0.2',
+    'ecdsa~=0.19',
+    'requests~=2.32',
+]
+requires-python = ">= 3.12"
+license = {file = "LICENSE"}
+keywords = [
+    'bitcoin',
+    'blockchain',
+    'library',
+    'simple',
+    'btc',
+    'lib'
+]
