@@ -1,6 +1,8 @@
 from typing import Optional
+
 import pytest
-from requests import Session
+from httpx import Client
+
 from btclib import address
 from btclib.const import NetworkType
 from btclib.service import *
@@ -56,8 +58,8 @@ def handle_noservice(request: pytest.FixtureRequest, pytestconfig: pytest.Config
 
 
 @pytest.fixture(scope='session')
-def session() -> requests.Session:
-    return requests.Session()
+def client() -> Client:
+    return Client(follow_redirects=True)
 
 
 @pytest.fixture(params=[BlockstreamAPI, BlockchairAPI, BlockchainAPI, BitcoreAPI])  # todo:  add BlockcypherAPI
@@ -101,49 +103,49 @@ def addr(request: pytest.FixtureRequest) -> tuple[BaseAddress, NetworkType]:
 
 class TestExplorerAPIs:
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
+    def test_get_address(self, client: Client, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
-        inf = api(network, session, timeout=API_TIMEOUT).get_address(address)
+        inf = api(network, client, timeout=API_TIMEOUT).get_address(address)
         assert isinstance(inf, AddressInfo)
         assert all(isinstance(x, int) for x in [inf.received, inf.balance, inf.spent, inf.tx_count])
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['transaction']['network']))
-    def test_get_transaction(self, session: Session, api: API, transaction: dict[str, typing.Any]):
-        tx = api(transaction['network'], session, timeout=API_TIMEOUT).get_transaction(transaction['id'])
+    def test_get_transaction(self, client: Client, api: API, transaction: dict[str, typing.Any]):
+        tx = api(transaction['network'], client, timeout=API_TIMEOUT).get_transaction(transaction['id'])
         assert tx.serialize().hex() == transaction['serialized']
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['transaction']['network']))
-    def test_get_transactions(self, session: Session, api: API, transaction: dict[str, typing.Any]):
-        txs = api(transaction['network'], session, timeout=API_TIMEOUT).get_transactions([transaction['id']])
+    def test_get_transactions(self, client: Client, api: API, transaction: dict[str, typing.Any]):
+        txs = api(transaction['network'], client, timeout=API_TIMEOUT).get_transactions([transaction['id']])
         assert all(map(lambda tx: tx.serialize().hex() == transaction['serialized'], txs))
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_address_transactions(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
+    def test_get_address_transactions(self, client: Client, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
-        f = api(network, session, timeout=API_TIMEOUT).get_address_transactions
+        f = api(network, client, timeout=API_TIMEOUT).get_address_transactions
         k = {'length': 10} if 'length' in f.__code__.co_varnames else {}
         txs = f(address, **k)
         assert len(txs) > 0
         assert all(isinstance(tx, BroadcastedTransaction) for tx in txs)
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['addr'][1]))
-    def test_get_unspent(self, session: Session, api: API, addr: tuple[BaseAddress, NetworkType]):
+    def test_get_unspent(self, client: Client, api: API, addr: tuple[BaseAddress, NetworkType]):
         address, network = addr
-        un = api(network, session, timeout=API_TIMEOUT).get_unspent(address)
+        un = api(network, client, timeout=API_TIMEOUT).get_unspent(address)
         assert all(isinstance(u, Unspent) for u in un)
         assert all(u.txid.hex() for u in un)
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['network']))
-    def test_head(self, session: Session, network: NetworkType, api: API):
+    def test_head(self, client: Client, network: NetworkType, api: API):
         if api is not BlockchainAPI or network is NetworkType.MAIN:
             return
-        h = api(network, session, timeout=API_TIMEOUT).head()
+        h = api(network, client, timeout=API_TIMEOUT).head()
         assert not h.is_mempool()
         assert h > { NetworkType.MAIN: 840000, NetworkType.TEST: 2800000 }[network]  # last halving
 
     @pytest.mark.uncollect_if(func=uncollect_apis(lambda k: k['coinbase_tx']['network'], 'get_transaction'))
-    def test_coinbase_transactions(self, session: Session, api: API, coinbase_tx: dict[str, typing.Any]):
-        tx = api(coinbase_tx['network'], session, timeout=API_TIMEOUT).get_transaction(coinbase_tx['id'])
+    def test_coinbase_transactions(self, client: Client, api: API, coinbase_tx: dict[str, typing.Any]):
+        tx = api(coinbase_tx['network'], client, timeout=API_TIMEOUT).get_transaction(coinbase_tx['id'])
         assert tx.is_coinbase()
         if api is not BlockchairAPI:
             if coinbase_tx['height'] != -1:
@@ -152,9 +154,9 @@ class TestExplorerAPIs:
 
 
 @pytest.fixture(scope='module', params=[BitcoinFeesAPI, MempoolSpaceAPI])
-def rateapi(request: pytest.FixtureRequest, pytestconfig: pytest.Config, session: requests.Session):
+def rateapi(request: pytest.FixtureRequest, pytestconfig: pytest.Config, client: Client):
     handle_noservice(request, pytestconfig)
-    a = request.param(NetworkType.MAIN, session, timeout=API_TIMEOUT)
+    a = request.param(NetworkType.MAIN, client, timeout=API_TIMEOUT)
     return a, a.get_rate()
 
 
