@@ -31,8 +31,8 @@ setup(
     ],
     install_requires=[
         'base58check~=1.0.2',
-        'ecdsa~=0.19',
-        'requests~=2.32',
+        'ecdsa~=0.19.0',
+        'httpx~=0.27.0',
     ],
     python_requires='>=3.12'
 )
