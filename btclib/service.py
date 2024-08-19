@@ -1,7 +1,7 @@
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import requests
+import httpx
 
 from btclib.script import Script
 from btclib.address import BaseAddress, PrivateKey
@@ -23,11 +23,11 @@ class ServiceError(Exception):
 @dataclass
 class NetworkError(Exception):
     api: 'BaseAPI'
-    response: requests.Response
+    response: httpx.Response
 
     def __post_init__(self) -> None:
         self.status_code: int = self.response.status_code
-        self.request: requests.PreparedRequest = self.response.request
+        self.request: httpx.Request = self.response.request
 
     def __str__(self) -> str:
         return f'{self.api.__class__.__name__} {self.status_code} {self.request.url}'
@@ -60,9 +60,9 @@ class BaseAPI(ABC):
 
     def __init__(self,
                  network: NetworkType = DEFAULT_NETWORK,
-                 session: typing.Optional[requests.Session] = None,
+                 client: typing.Optional[httpx.Client] = None,
                  timeout: int = DEFAULT_SERVICE_TIMEOUT) -> None:
-        self.session = session or requests.Session()
+        self.client = client or httpx.Client(follow_redirects=True)
         self.network = network
         self.timeout = timeout
 
@@ -91,9 +91,9 @@ class BaseAPI(ABC):
                 endpoint_key: str,
                 session_params: dict[str, typing.Any] = {},
                 *,
-                handle_response: bool = True, **kwargs) -> requests.Response:
+                handle_response: bool = True, **kwargs) -> httpx.Response:
         session_params.setdefault('timeout', self.timeout)
-        r = self.session.request(method, self.get_endpoint(endpoint_key, **kwargs), **session_params)
+        r = self.client.request(method, self.get_endpoint(endpoint_key, **kwargs), **session_params)
         if handle_response:
             self.handle_response(r)
         return r
@@ -103,7 +103,7 @@ class BaseAPI(ABC):
             session_params: dict[str, typing.Any] = {},
             *,
             handle_response: bool = True,
-            **kwargs) -> requests.Response:
+            **kwargs) -> httpx.Response:
         return self.request('GET', endpoint_key, session_params, handle_response=handle_response, **kwargs)
 
     def post(self,
@@ -111,10 +111,10 @@ class BaseAPI(ABC):
              session_params: dict[str, typing.Any] = {},
              *,
              handle_response: bool = True,
-             **kwargs) -> requests.Response:
+             **kwargs) -> httpx.Response:
         return self.request('POST', endpoint_key, session_params, handle_response=handle_response, **kwargs)
 
-    def handle_response(self, r: requests.Response) -> None:
+    def handle_response(self, r: httpx.Response) -> None:
         """Base response handling for subclasses"""
         if r.status_code == 404:
             raise NotFoundError(self, r)
@@ -166,7 +166,7 @@ class BlockchairAPI(ExplorerAPI):
         'param': 'data'
     }
 
-    def handle_response(self, r: requests.Response):
+    def handle_response(self, r: httpx.Response):
         if r.status_code in [403, 430]:
             raise ExceededLimitError(self, r)
         return super().handle_response(r)
@@ -189,7 +189,7 @@ class BlockchairAPI(ExplorerAPI):
             data['transaction']['lock_time']
         )
 
-    def handle_address_notfound(self, d: dict[str, typing.Any], r: requests.Response):
+    def handle_address_notfound(self, d: dict[str, typing.Any], r: httpx.Response):
         """
         Inner method for handling address existence (not in handle_response cause api returns 200 code)
         :param d: address data (data/<address-string>/address)
@@ -269,7 +269,7 @@ class BlockstreamAPI(ExplorerAPI):
         'param': 'data'
     }
 
-    def handle_response(self, r: requests.Response) -> None:
+    def handle_response(self, r: httpx.Response) -> None:
         if r.status_code == 400:
             if r.text.strip() == 'Too many history entries':
                 raise ExcessiveAddress(self, r)
@@ -456,7 +456,7 @@ class BlockcypherAPI(ExplorerAPI):
     endpoints: dict[str, str] = NotImplemented
     pushing: dict[str, str] = NotImplemented
 
-    def handle_response(self, r: requests.Response) -> None:
+    def handle_response(self, r: httpx.Response) -> None:
         pass
 
     def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
@@ -498,7 +498,7 @@ class BitcoreAPI(ExplorerAPI):
         'param': 'rawTx'
     }
 
-    def handle_response(self, r: requests.Response):
+    def handle_response(self, r: httpx.Response):
         super().handle_response(r)
         r.raise_for_status()
         return
@@ -543,17 +543,17 @@ class Service(ExplorerAPI):
                  network: NetworkType = DEFAULT_NETWORK,
                  basepriority: typing.Optional[_api_priority_T] = None,
                  priority: typing.Optional[dict[typing.Callable, _api_priority_T]] = None,
-                 session: typing.Optional[requests.Session] = None,
+                 client: typing.Optional[httpx.Client] = None,
                  timeout: int = DEFAULT_SERVICE_TIMEOUT,
                  ignored_errors: typing.Optional[_network_errors_T] = None) -> None:
         """
         :param basepriority:
         :param priority:
         """
-        super().__init__(network, session, timeout)
+        super().__init__(network, client, timeout)
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
-        self.ignored_errors = ignored_errors or [ConnectionError, requests.exceptions.ReadTimeout]
+        self.ignored_errors = ignored_errors or [ConnectionError, httpx.TimeoutException]
 
     @classmethod
     def supports_network(cls, network: NetworkType) -> bool:
@@ -577,7 +577,7 @@ class Service(ExplorerAPI):
         errors: dict[BaseAPI, Exception] = {}
 
         for T in p:
-            api = T(self.network, self.session, self.timeout)
+            api = T(self.network, self.client, self.timeout)
             method = getattr(api, attr)
             try:
                 return method(*args, **kwargs)
