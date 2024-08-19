@@ -10,17 +10,6 @@ from btclib.transaction import Block, CoinbaseInput, Unspent, RawTransaction, Tr
 
 
 @dataclass
-class ServiceError(Exception):
-    message: str
-    attr: str
-    priority: 'Service._api_priority_T'
-    errors: dict['BaseAPI', 'Exception']
-
-    def __str__(self) -> str:
-        return self.message
-
-
-@dataclass
 class NetworkError(Exception):
     api: 'BaseAPI'
     response: httpx.Response
@@ -39,6 +28,17 @@ class NotFoundError(NetworkError, LookupError): ...
 class ExcessiveAddress(NetworkError, OverflowError): ...
 class ServiceUnavailableError(NetworkError): ...
 class AddressOverflowError(NetworkError, OverflowError): ...
+
+
+@dataclass
+class ServiceError(Exception):
+    message: str
+    attr: str
+    priority: 'Service._api_priority_T'
+    errors: dict['ExplorerAPI', 'Exception']
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass
@@ -536,7 +536,7 @@ class Service(ExplorerAPI):
 
     Priority:
     """
-    type _api_priority_T = list[type[BaseAPI]]
+    type _api_priority_T = list[type[ExplorerAPI]]
     type _network_errors_T = list[type[Exception]]
 
     def __init__(self,
@@ -554,6 +554,7 @@ class Service(ExplorerAPI):
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
         self.ignored_errors = ignored_errors or [ConnectionError, httpx.TimeoutException]
+        self.previous_explorer: typing.Optional[type[ExplorerAPI]] = None
 
     @classmethod
     def supports_network(cls, network: NetworkType) -> bool:
@@ -574,13 +575,15 @@ class Service(ExplorerAPI):
              priority: typing.Optional[_api_priority_T] = None,
              ignored_errors: typing.Optional[_network_errors_T] = None) -> typing.Any:
         p = self.resolve_priority(getattr(Service, attr), priority)
-        errors: dict[BaseAPI, Exception] = {}
+        errors: dict[ExplorerAPI, Exception] = {}
 
         for T in p:
             api = T(self.network, self.client, self.timeout)
             method = getattr(api, attr)
             try:
-                return method(*args, **kwargs)
+                r = method(*args, **kwargs)
+                self.previous_explorer = T
+                return r
             except tuple(ignored_errors or self.ignored_errors) as e:
                 errors[api] = e
 
