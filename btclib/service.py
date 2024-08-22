@@ -10,7 +10,7 @@ from btclib.transaction import Block, CoinbaseInput, Unspent, RawTransaction, Tr
 
 
 @dataclass
-class NetworkError(Exception):
+class ExplorerError(Exception):
     api: 'BaseAPI'
     response: httpx.Response
 
@@ -23,15 +23,15 @@ class NetworkError(Exception):
 
 
 # exceptions
-class ExceededLimitError(NetworkError):...
-class NotFoundError(NetworkError, LookupError): ...
-class ExcessiveAddress(NetworkError, OverflowError): ...
-class ServiceUnavailableError(NetworkError): ...
-class AddressOverflowError(NetworkError, OverflowError): ...
+class ExceededLimitError(ExplorerError):...
+class NotFoundError(ExplorerError, LookupError): ...
+class ExcessiveAddress(ExplorerError, OverflowError): ...
+class ServiceUnavailableError(ExplorerError): ...
+class AddressOverflowError(ExplorerError, OverflowError): ...
 
 
 @dataclass
-class ServiceError(Exception):
+class ServiceUnavaliableError(Exception):
     message: str
     attr: str
     priority: 'Service._api_priority_T'
@@ -86,6 +86,13 @@ class BaseAPI(ABC):
     def get_endpoint(self, key: str, **kwargs) -> str:
         return self.endpoints[key].format(uri=self.uri[self.network], **kwargs)
 
+    def handle_response(self, r: httpx.Response) -> None:
+        """Base response handling for subclasses"""
+        if r.status_code == 404:
+            raise NotFoundError(self, r)
+        if r.status_code != 200:  # fixme: 200 <= x < 300
+            raise ExplorerError(self, r)
+
     def request(self,
                 method: str,
                 endpoint_key: str,
@@ -114,12 +121,38 @@ class BaseAPI(ABC):
              **kwargs) -> httpx.Response:
         return self.request('POST', endpoint_key, session_params, handle_response=handle_response, **kwargs)
 
-    def handle_response(self, r: httpx.Response) -> None:
-        """Base response handling for subclasses"""
-        if r.status_code == 404:
-            raise NotFoundError(self, r)
-        if r.status_code != 200:  # fixme: 200 <= x < 300
-            raise NetworkError(self, r)
+
+class GetTransactionsResult(list[BroadcastedTransaction]):
+    except_errors = ExplorerError, httpx.NetworkError, httpx.TimeoutException
+
+    def __init__(
+        self,
+        iterable: typing.Iterable[BroadcastedTransaction] = [],
+        *,
+        unfound: dict[
+            str,
+            ExplorerError | httpx.NetworkError | httpx.TimeoutException
+        ] | None = None
+    ):
+        super().__init__(iterable)
+        self.unfound = unfound or {}
+
+    def fill(
+        self,
+        request_transactions: typing.Iterable[str],
+        processed_transactions: typing.Iterable[BroadcastedTransaction],
+        notfound_error: NotFoundError
+    ) -> None:
+        txs = {
+            tx.id.hex(): tx
+            for tx in processed_transactions
+        }
+        for id in request_transactions:
+            tx = txs.get(id)
+            if tx:
+                self.append(tx)
+            else:
+                self.unfound[id] = notfound_error
 
 
 class ExplorerAPI(BaseAPI):
@@ -134,8 +167,17 @@ class ExplorerAPI(BaseAPI):
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
         raise NotImplementedError
 
-    def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
-        return list(map(self.get_transaction, txids))
+    def get_transactions(self, txids: list[str]) -> GetTransactionsResult:
+        """
+        :param return: Returns tuple of transactions and transactions which could be found
+        """
+        r = GetTransactionsResult()
+        for txid in txids:
+            try:
+                r.append(self.get_transaction(txid))
+            except r.except_errors as e:
+                r.unfound[txid] = e
+        return r
 
     def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
         raise NotImplementedError
@@ -210,21 +252,24 @@ class BlockchairAPI(ExplorerAPI):
             raise NotFoundError(self, r)
         return self.process_transaction(d[txid])
 
-    def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
-        txs: list[BroadcastedTransaction] = []
+    def get_transactions(self, txids: list[str]) -> GetTransactionsResult:
+        r = GetTransactionsResult()
         for s in range(0, len(txids), 10):  # max 10 txs per request
             cur = txids[s:s + 10]
-            r = self.get('txs', txids=','.join(cur), handle_response=False)
-
-            if r.status_code == 400:
-                raise NotFoundError(self, r)
-            self.handle_response(r)
-
-            d = r.json()['data']
-            if not d:
-                raise NotFoundError(self, r)
-            txs.extend(self.process_transaction(d[tx]) for tx in cur)
-        return txs
+            try:
+                response = self.get('txs', txids=','.join(cur), handle_response=False)
+                nferr = NotFoundError(self, response)
+                if response.status_code == 400:
+                    raise nferr
+                self.handle_response(response)
+                rd = response.json()['data']
+                if not rd:
+                    raise nferr
+                r.fill(cur, map(self.process_transaction, rd), nferr)
+            except r.except_errors as e:
+                for id in cur:
+                    r.unfound[id] = e
+        return r
 
     def get_address_transactions(self, address: BaseAddress, length: int, offset: int = 0) -> list[BroadcastedTransaction]:
         params = {
@@ -408,13 +453,20 @@ class BlockchainAPI(ExplorerAPI):
         d = self.get('tx', txid=txid).json()
         return self.process_transaction(d)
 
-    def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
-        r = self.get('txs', {'params': { 'txids': ','.join(txids) }}, handle_response=False)
-        d = r.json()
-        if r.status_code == 400 and d['message'].strip() == 'Unable to parse param txids':
-            raise NotFoundError(self, r)
-        self.handle_response(r)
-        return list(map(self.process_transaction, d))
+    def get_transactions(self, txids: list[str]) -> GetTransactionsResult:
+        r = GetTransactionsResult()
+        try:
+            response = self.get('txs', {'params': { 'txids': ','.join(txids) }}, handle_response=False)
+            rd = response.json()
+            nferr = NotFoundError(self, response)
+            if not rd or response.status_code == 400 and rd['message'].strip() == 'Unable to parse param txids':
+                raise nferr
+            self.handle_response(response)
+            r.fill(txids, map(self.process_transaction, rd), nferr)
+        except r.except_errors as e:
+            for id in txids:
+                r.unfound[id] = e
+        return r
 
     def get_address_transactions(self, address: BaseAddress, length: int, offset: int = 0)  -> list[BroadcastedTransaction]:
         params = {
@@ -468,8 +520,8 @@ class BlockcypherAPI(ExplorerAPI):
     def get_transaction(self, txid: str) -> BroadcastedTransaction:
         raise NotImplementedError
 
-    def get_transactions(self, txids: list[str]) -> list[BroadcastedTransaction]:
-        return list(map(self.get_transaction, txids))
+    def get_transactions(self, txids: list[str]) -> GetTransactionsResult:
+        return super().get_transactions(txids)
 
     def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
         raise NotImplementedError
@@ -553,7 +605,7 @@ class Service(ExplorerAPI):
         super().__init__(network, client, timeout)
         self.basepriority = basepriority or Service.basepriority.copy()
         self.priority = priority or Service.priority.copy()
-        self.ignored_errors = ignored_errors or [ConnectionError, httpx.TimeoutException]
+        self.ignored_errors = ignored_errors or [httpx.NetworkError, httpx.TimeoutException]
         self.previous_explorer: typing.Optional[type[ExplorerAPI]] = None
 
     @classmethod
@@ -587,7 +639,7 @@ class Service(ExplorerAPI):
             except tuple(ignored_errors or self.ignored_errors) as e:
                 errors[api] = e
 
-        raise ServiceError('none of the called api provided a result', attr, p, errors)
+        raise ServiceUnavaliableError('none of the called api provided a result', attr, p, errors)
 
     def get_address(self,
                     address: BaseAddress,
@@ -604,7 +656,7 @@ class Service(ExplorerAPI):
     def get_transactions(self,
                          txids: list[str],
                          priority: typing.Optional[_api_priority_T] = None,
-                         ignored_errors: typing.Optional[_network_errors_T] = None) -> list[BroadcastedTransaction]:
+                         ignored_errors: typing.Optional[_network_errors_T] = None) -> GetTransactionsResult:
         return self.call('get_transactions', [txids], {}, priority, ignored_errors)
 
     def get_address_transactions(self, address: BaseAddress, *args, **kwargs) -> list[BroadcastedTransaction]:
