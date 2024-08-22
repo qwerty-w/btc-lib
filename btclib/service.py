@@ -90,7 +90,7 @@ class BaseAPI(ABC):
         """Base response handling for subclasses"""
         if r.status_code == 404:
             raise NotFoundError(self, r)
-        if r.status_code != 200:  # fixme: 200 <= x < 300
+        if r.status_code != 200:  # todo: maybe 200 <= x < 300 ?
             raise ExplorerError(self, r)
 
     def request(self,
@@ -213,10 +213,10 @@ class BlockchairAPI(ExplorerAPI):
             raise ExceededLimitError(self, r)
         return super().handle_response(r)
 
-    def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:  # todo: maybe add get_coinbasetx() and process it (except its havent inputs)
+    def process_transaction(self, data: dict[str, typing.Any]) -> BroadcastedTransaction:
         ins: ioList[UnsignableInput] = ioList()
         if data['transaction'].get('is_coinbase'):
-            ins.append(CoinbaseInput(b'', b''))
+            ins.append(CoinbaseInput(b'', b''))  # todo: process coinbase tx
         for inp in data['inputs']:  # if is_coinbase inputs will be empty
             i = UnsignableInput(bytes.fromhex(inp['transaction_hash']), inp['index'], inp['value'], inp['spending_sequence'])
             i.script = Script.deserialize(inp['spending_signature_hex'])
@@ -503,7 +503,7 @@ class BlockchainAPI(ExplorerAPI):
         return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
-class BlockcypherAPI(ExplorerAPI):
+class BlockcypherAPI(ExplorerAPI):  # todo: implement me
     uri: dict[NetworkType, str] = NotImplemented
     endpoints: dict[str, str] = NotImplemented
     pushing: dict[str, str] = NotImplemented
@@ -706,7 +706,7 @@ class Service(ExplorerAPI):
         BlockchainAPI,
         BlockstreamAPI,
         BlockchairAPI,
-        # BlockcypherAPI,  # todo: implement me
+        # BlockcypherAPI,
         BitcoreAPI
     ]
     # custom priority for each method
