@@ -62,31 +62,6 @@ PREFIXES = {
         NetworkType.MAIN: b'\x80',
         NetworkType.TEST: b'\xef'
     },
-    AddressType.P2PKH: {
-        NetworkType.MAIN: b'\x00',
-        NetworkType.TEST: b'\x6f'
-    },
-    AddressType.P2SH_P2WPKH: {
-        NetworkType.MAIN: b'\x05',
-        NetworkType.TEST: b'\xc4'
-    },
-    'bech32': {
-        NetworkType.MAIN: 'bc',
-        NetworkType.TEST: 'tb'
-    },
-    'public_key': {
-        'compressed': {
-            'even': b'\x02',
-            'odd': b'\x03'
-        },
-        'uncompressed': b'\x04'
-    },
-    'legacy_reversed': {
-        b'\x00': (AddressType.P2PKH, NetworkType.MAIN),
-        b'\x6f': (AddressType.P2PKH, NetworkType.TEST),
-        b'\x05': (AddressType.P2SH_P2WPKH, NetworkType.MAIN),
-        b'\xc4': (AddressType.P2SH_P2WPKH, NetworkType.TEST)
-    },
     'wif_reversed': {
         b'\x80': NetworkType.MAIN,
         b'\xef': NetworkType.TEST,
@@ -100,6 +75,40 @@ PREFIXES = {
         b'\x85': NetworkType.MAIN,
         b'\x86': NetworkType.MAIN,
         b'\x87': NetworkType.MAIN
+    },
+    'public_key': {
+        'compressed': {
+            'even': b'\x02',
+            'odd': b'\x03'
+        },
+        'uncompressed': b'\x04'
+    },
+    'legacy': {
+        AddressType.P2PKH: {
+            NetworkType.MAIN: b'\x00',
+            NetworkType.TEST: b'\x6f'
+        },
+        AddressType.P2SH_P2WPKH: {
+            NetworkType.MAIN: b'\x05',
+            NetworkType.TEST: b'\xc4'
+        }
+    },
+    'legacy_reversed': {
+        b'\x00': (AddressType.P2PKH, NetworkType.MAIN),
+        b'\x6f': (AddressType.P2PKH, NetworkType.TEST),
+        b'\x05': (AddressType.P2SH_P2WPKH, NetworkType.MAIN),
+        b'\xc4': (AddressType.P2SH_P2WPKH, NetworkType.TEST)
+    },
+    'bech32': {
+        'separator': '1',
+        'hrp': {
+            NetworkType.MAIN: 'bc',
+            NetworkType.TEST: 'tb'
+        },
+        'hrpsep': {
+            NetworkType.MAIN: 'bc1',
+            NetworkType.TEST: 'tb1'
+        }
     }
 }
 
