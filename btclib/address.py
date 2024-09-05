@@ -288,18 +288,21 @@ class LegacyAddress(BaseAddress, ABC):
 
     @classmethod
     def from_string(cls, string: str) -> Self:
-        d = b58decode(string.encode('utf8'))
+        try:
+            d = b58decode(string.encode('utf8'))
+        except ValueError:
+            raise ValueError(f"base58 decode failed '{string}'") from None
         # prefix, hash, checksum
         p, h, cs = d[:1], d[1:-4], d[-4:]
-        assert p in PREFIXES['legacy_reversed'], "unknown prefix '{p}'"
+        assert p in PREFIXES['legacy_reversed'], f"unknown prefix '{p}'"
         type, network = PREFIXES['legacy_reversed'][p]
-        assert d_sha256(p + h)[:4] == cs, f"address '{string}' checksum verification failed"
-        assert type == cls.type
+        assert type == cls.type, f"wrong class {cls.__name__} for address '{string}' with type {type}"
         assert len(h) == cls.hashlength, f"incorrect {cls.__name__} address '{string}'"
+        assert d_sha256(p + h)[:4] == cs, f"address '{string}' checksum verification failed"
         return cls(h, network)
 
     def _to_string(self) -> str:
-        b = PREFIXES[self.type][self.network] + self.hash
+        b = PREFIXES['legacy'][self.type][self.network] + self.hash
         cs = d_sha256(b)[:4]
         return b58encode(b + cs).decode('utf8')
 
@@ -331,8 +334,8 @@ class SegwitAddress(BaseAddress, ABC):
     @classmethod
     def from_string(cls, string: str) -> Self:
         network = get_address_network(string)
-        assert network, 'failed to identify network (it can be specified)'
-        ver, h = bech32.decode(PREFIXES['bech32'][network], string)
+        assert network, 'failed to identify network'
+        ver, h = bech32.decode(PREFIXES['bech32']['hrp'][network], string)
         assert None not in [ver, h], f"bech32 decode failed '{string}'"
         h = bytes(cast(list[int], h))
         assert ver == cls.version, f'{cls.__name__}() supports only witness version {cls.version} but {ver} received'
@@ -340,7 +343,7 @@ class SegwitAddress(BaseAddress, ABC):
         return cls(h, network)
 
     def _to_string(self) -> str:
-        s = bech32.encode(PREFIXES['bech32'][self.network], self.version, list(self.hash))
+        s = bech32.encode(PREFIXES['bech32']['hrp'][self.network], self.version, list(self.hash))
         assert s is not None, f"bech32 encode failed '{self.hash.hex()}'"
         return s
 
@@ -367,7 +370,7 @@ class P2WSH(SegwitAddress):
 
 class P2TR(SegwitAddress):
     type = AddressType.P2TR
-    hashlength = SCHNORR_COMPRESSED_PUBKEY_LENGTH  # todo: not hash actually
+    hashlength = SCHNORR_COMPRESSED_PUBKEY_LENGTH  # todo: not hash actually (rename to payload?)
     version = SEGWIT_V1_WITVER
 
     def _to_pkscript(self) -> Script:

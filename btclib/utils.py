@@ -316,7 +316,7 @@ def validate_address(address: str, address_type: AddressType, address_network: N
             return False
 
     elif rtype == AddressType.P2WPKH:
-        ver, prog = bech32.decode(PREFIXES['bech32'][address_network], address)
+        ver, prog = bech32.decode(PREFIXES['bech32']['hrp'][address_network], address)
         return ver == SEGWIT_V0_WITVER and prog is not None
 
     elif rtype in [AddressType.P2WSH, AddressType.P2TR]:
