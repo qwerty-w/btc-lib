@@ -109,6 +109,16 @@ PREFIXES = {
             NetworkType.MAIN: 'bc1',
             NetworkType.TEST: 'tb1'
         }
+    },
+    'bech32_reversed': {
+        'hrp': {
+            'bc': NetworkType.MAIN,
+            'tb': NetworkType.TEST
+        },
+        'hrpsep': {
+            'bc1': NetworkType.MAIN,
+            'tb1': NetworkType.TEST
+        }
     }
 }
 

@@ -1,13 +1,11 @@
 import json
 import hashlib
 from decimal import Decimal
-from base58check import b58decode
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable, Literal, Optional, Self, \
                    overload, Protocol, runtime_checkable, Mapping
 
-from btclib import bech32
-from btclib.const import PREFIXES, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, SEPARATORS, SEPARATORS_REVERSED, AddressType, NetworkType
+from btclib.const import SEPARATORS, SEPARATORS_REVERSED
 
 
 byteorder_T = Literal['little', 'big']
@@ -267,65 +265,6 @@ def get_magic_hash(message: str) -> bytes:
         int2bytes(len(message)),
         messageb
     ]))
-
-
-def get_address_network(address: str) -> Optional[NetworkType]:
-    if address.startswith(('1', '3', 'bc')):
-        return NetworkType.MAIN
-
-    elif address.startswith(('2', 'm', 'n', 'tb')):
-        return NetworkType.TEST
-
-
-def get_address_type(address: str) -> Optional[AddressType]:
-    if address.startswith(('1', 'm', 'n')):
-        return AddressType.P2PKH
-
-    elif address.startswith(('2', '3')):
-        return AddressType.P2SH_P2WPKH
-
-    elif address.startswith(('bc', 'tb')):
-        if len(address) == 42:
-            return AddressType.P2WPKH
-
-        elif len(address) == 62:
-            ver, prog = bech32.decode(address[:2], address)
-            return {
-                SEGWIT_V0_WITVER: AddressType.P2WSH,
-                SEGWIT_V1_WITVER: AddressType.P2TR
-            }.get(ver) if prog else None  # type: ignore
-
-
-def validate_address(address: str, address_type: AddressType, address_network: NetworkType) -> bool:
-    rtype = get_address_type(address)  # right type
-
-    if rtype != address_type or get_address_network(address) != address_network:
-        return False
-
-    if rtype in [AddressType.P2PKH, AddressType.P2SH_P2WPKH]:
-        if not 26 <= len(address) <= 35:
-            return False
-
-        try:
-            b = b58decode(address.encode('utf8'))
-            checksum, h = b[-4:], d_sha256(b[:-4])
-        except:
-            return False
-
-        if h[:4] != checksum:
-            return False
-
-    elif rtype == AddressType.P2WPKH:
-        ver, prog = bech32.decode(PREFIXES['bech32']['hrp'][address_network], address)
-        return ver == SEGWIT_V0_WITVER and prog is not None
-
-    elif rtype in [AddressType.P2WSH, AddressType.P2TR]:
-        ... # already decoded and validated in get_address_type
-
-    else:
-        return False
-
-    return True
 
 
 def to_satoshis(value: float) -> int:

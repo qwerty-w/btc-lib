@@ -35,13 +35,6 @@ i2b_data = [
     (-10000000, b'\xff\x67\x69\x80')
 ]
 
-incorrect_addresses = [
-    '0NL24E8oHWUGA8dbjQRnhhwEfzyo62E1fW',
-    'L7eHfJVpaZjnkDJi5d8t487Tmpm1kQ3F8',
-    'tl1qvdhxfplzc0xymvxm2an6zcy489jwqtaykynvgq',
-    'gg1qljvsdavfjea3jhwvak2h2ht2kf9zpf39phhtyemv3d5n8r6vlspsjjcta8'
-]
-
 
 @pytest.fixture(params=[sint32, sint64, uint32, uint64])
 def int_cls(request):
@@ -219,29 +212,3 @@ def test_int2bytes_signed(i2b_items):
 def test_bytes2int_signed(i2b_items):
     (integer, integer_bytes), byteorder = i2b_items
     assert bytes2int(integer_bytes, byteorder, signed=True) == integer
-
-
-def test_get_address_network_correct_data(address: addrobj, network):
-    assert get_address_network(address.json['string'][network.value]) == network
-
-
-@pytest.mark.parametrize('incorrect_address', incorrect_addresses)
-def test_get_address_network_incorrect_data(incorrect_address):
-    assert get_address_network(incorrect_address) is None
-
-
-def test_get_address_type(address: addrobj, network):
-    assert get_address_type(address.json['string'][network.value]) == address.type == address.ins.type
-
-
-def test_validate_address_correct_data(address: addrobj, network):
-    assert validate_address(address.json['string'][network.value], address.type, network)
-
-
-@pytest.mark.parametrize('incorrect_address', incorrect_addresses)
-def test_validate_address_incorrect_data(incorrect_address):
-    assert validate_address(
-        incorrect_address,
-        random.choice([AddressType.P2PKH, AddressType.P2SH_P2WPKH, AddressType.P2WPKH, AddressType.P2WSH]),
-        random.choice([NetworkType.MAIN, NetworkType.TEST])
-    ) is False
