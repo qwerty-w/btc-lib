@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Self, Optional, cast
+from typing import cast, Self, Optional, Literal
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from ecdsa.keys import BadSignatureError
 from ecdsa.util import sigencode_der, sigencode_string, sigdecode_string
@@ -12,8 +12,8 @@ from btclib.script import opcode, Script
 from btclib.const import PREFIXES, MAX_ORDER, SIGHASHES, P, SEGWIT_V0_WITVER, SEGWIT_V1_WITVER, \
                          HASH160_LENGTH, SHA256_LENGTH, SCHNORR_COMPRESSED_PUBKEY_LENGTH, \
                          DEFAULT_NETWORK, AddressType, NetworkType
-from btclib.utils import sha256, d_sha256, get_address_network, \
-    get_address_type, get_magic_hash, int2bytes, bytes2int, pprint_class, op_hash160
+from btclib.utils import sha256, d_sha256, op_hash160, int2bytes, bytes2int, \
+                         get_magic_hash, pprint_class
 
 
 class PrivateKey:
@@ -174,14 +174,14 @@ class PublicKey:
             compressed=self.compressed
         )
 
-    def get_address(self, type: AddressType) -> 'BaseAddress':
+    def get_address(self, type: AddressType) -> 'BaseAddress':  # todo: rename to to_address
         cls = {
             AddressType.P2PKH: P2PKH,
             AddressType.P2SH_P2WPKH: P2SH,
             AddressType.P2WPKH: P2WPKH,
             AddressType.P2WSH: P2WSH
         }.get(type)
-        assert cls, f"unknown address type '{type}'"
+        assert cls, f"unsupported address type '{type}'"
 
         match type:
             case AddressType.P2PKH | AddressType.P2WPKH:
@@ -333,8 +333,8 @@ class SegwitAddress(BaseAddress, ABC):
 
     @classmethod
     def from_string(cls, string: str) -> Self:
-        network = get_address_network(string)
-        assert network, 'failed to identify network'
+        _, network = getaddrinfo(string)
+        assert network, f"unknown address '{string}' prefix"
         ver, h = bech32.decode(PREFIXES['bech32']['hrp'][network], string)
         assert None not in [ver, h], f"bech32 decode failed '{string}'"
         h = bytes(cast(list[int], h))
@@ -377,8 +377,41 @@ class P2TR(SegwitAddress):
         return Script(opcode.OP_1, self.hash)
 
 
+def getaddrinfo(string: str) -> tuple[AddressType, NetworkType] | tuple[None, None]:
+    if string.startswith(tuple(PREFIXES['bech32']['hrpsep'].values())):
+        p = string[:string.rfind('1')]
+        ver, prog = bech32.decode(p, string)
+        if not prog:
+            return None, None
+        if ver == SEGWIT_V1_WITVER:
+            t = AddressType.P2TR
+        elif ver == SEGWIT_V0_WITVER and len(prog) == 20:
+            t = AddressType.P2WPKH
+        elif ver == SEGWIT_V0_WITVER and len(prog) == 32:
+            t = AddressType.P2WSH
+        else:
+            return None, None
+        return t, PREFIXES['bech32_reversed']['hrp'][p]
+    else:  # legacy address
+        try:
+            decoded = b58decode(string)
+            p = decoded[:1]
+        except (ValueError, IndexError):
+            return None, None
+        return PREFIXES['legacy_reversed'].get(p, (None, None))
+
+
+def validateaddr(string: str, type: AddressType | None, network: NetworkType | None) -> Literal[True]:
+    a = from_string(string)  # raises ValueError/AssertionError
+    if type is not None and a.type != type:
+        raise ValueError(f"wrong type {type} for address '{string}'")
+    if network is not None and a.network != network:
+        raise ValueError(f"wrong network {network} for address '{string}'")
+    return True
+
+
 def from_string(address: str) -> BaseAddress:
-    type = get_address_type(address)
+    type, _ = getaddrinfo(address)
     cls = {
         AddressType.P2PKH: P2PKH,
         AddressType.P2SH_P2WPKH: P2SH,

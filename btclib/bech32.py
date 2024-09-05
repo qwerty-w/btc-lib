@@ -118,7 +118,7 @@ def convertbits(data: Iterable[int], frombits: int, tobits: int, pad: bool = Tru
     return ret
 
 
-def decode(hrp: str, addr: str) -> tuple[None, None] | tuple[int, list[int]]:
+def decode(hrp: str, addr: str) -> tuple[int, list[int]] | tuple[None, None]:
     """Decode a segwit address."""
     hrpgot, data, spec = bech32_decode(addr)  # type: ignore
     if hrpgot != hrp:

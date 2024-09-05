@@ -3,10 +3,10 @@ from .conftest import pvobj, addrobj, msgobj, address_T
 from btclib.address import *
 
 
-@pytest.fixture(params=['pub', 'hash', 'string', 'pkscript'])  # address instance from hash/pub
+@pytest.fixture(params=['pub', 'hash', 'string', 'pkscript'])  # address instance from hash/pub/...etc
 def address(request, pv: pvobj, address_type: address_T) -> addrobj:
     """
-    It differs from the "address" fixture in conftest.py in that it has parameterization "from hash / pub".
+    It differs from the "address" fixture in conftest.py in that it has parameterization "from hash/pub/string/pkscript".
     Has the same name for convenience.
     """
     json = pv.json[address_type.value]
@@ -90,3 +90,52 @@ class TestAddress:
         # start with 'mainnet' cause in address fixture ins init with "mainnet"
         assert address.ins.network == NetworkType.MAIN
         assert address.ins.change_network().network == NetworkType.TEST
+
+
+incorrect_addresses = [
+    '0NL24E8oHWUGA8dbjQRnhhwEfzyo62E1fW',
+    'L7eHfJVpaZjnkDJi5d8t487Tmpm1kQ3F8',
+    'tl1qvdhxfplzc0xymvxm2an6zcy489jwqtaykynvgq',
+    'gg1qljvsdavfjea3jhwvak2h2ht2kf9zpf39phhtyemv3d5n8r6vlspsjjcta8'
+]
+
+
+def test_getaddrinfo_correct_data(address: addrobj, network):
+    t, n = getaddrinfo(address.json['string'][network.value])
+    assert address.type == t
+    assert network == n
+
+
+@pytest.mark.parametrize('incorrect', incorrect_addresses)
+def test_getaddrinfo_incorrect_data(incorrect):
+    assert getaddrinfo(incorrect) == (None, None)
+
+
+def test_validateaddr_correct_data(address: addrobj, network):
+    s = address.json['string'][network.value]
+    for t, n in [
+        (address.type, network),
+        (address.type, None),
+        (None, network),
+        (None, None)
+    ]:
+        assert validateaddr(s, t, n)
+
+
+@pytest.mark.parametrize('incorrect', incorrect_addresses)
+def test_validate_address_incorrect_data(incorrect, address_type, network):
+    try:
+        validateaddr(incorrect, address_type, network)
+        assert False
+    except (ValueError, AssertionError):
+        assert True
+
+
+@pytest.mark.parametrize('incorrect', incorrect_addresses)
+def test_validate_address_incorrect_data_with_none_none(incorrect):
+    try:
+        validateaddr(incorrect, None, None)
+        assert False
+    except (ValueError, AssertionError):
+        assert True
+
