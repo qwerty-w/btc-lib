@@ -401,11 +401,14 @@ def getaddrinfo(string: str) -> tuple[AddressType, NetworkType] | tuple[None, No
         return PREFIXES['legacy_reversed'].get(p, (None, None))
 
 
-def validateaddr(string: str, type: AddressType | None, network: NetworkType | None) -> Literal[True]:
-    a = from_string(string)  # raises ValueError/AssertionError
-    if type is not None and a.type != type:
+def validateaddr(string: str | BaseAddress, type: AddressType | None, network: NetworkType | None) -> Literal[True]:
+    address = string if isinstance(
+        string,
+        BaseAddress
+    ) else from_string(string)  # raises ValueError/AssertionError
+    if type is not None and address.type != type:
         raise ValueError(f"wrong type {type} for address '{string}'")
-    if network is not None and a.network != network:
+    if network is not None and address.network != network:
         raise ValueError(f"wrong network {network} for address '{string}'")
     return True
 
