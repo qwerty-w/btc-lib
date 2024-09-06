@@ -1,4 +1,4 @@
-from btclib import bech32, utils
+from btclib import address, transaction, script, utils, const, bech32, service
 from btclib.script import opcode, Script
 from btclib.service import Service
 from btclib.const import AddressType, NetworkType
