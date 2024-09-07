@@ -299,9 +299,9 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         self.pkscript = pkscript
         self.amount = amount
         try:
-            self._address = from_pkscript(pkscript)
+            self.address: BaseAddress | None = from_pkscript(pkscript)
         except:
-            self._address = None
+            self.address = None
 
     @classmethod
     def from_address(cls, address: BaseAddress, amount: int) -> Self:
@@ -310,8 +310,9 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
     def __repr__(self):
         return pprint_class(self, kwargs={
             'pkscript': self.pkscript,
-            'amount': self.amount
-        } | ({ 'address': self._address } if self._address else {}))
+            'amount': self.amount,
+            'address': self.address
+        })
 
     def copy(self) -> 'Output':
         return Output(self.pkscript, self.amount)
@@ -457,12 +458,12 @@ class TransactionDeserializer:
         return size
 
     @overload
-    def deserialize(self, *, hexdecimal: Literal[True] = True) -> TransactionDict[str]: ...
+    def deserialize(self, *, hexadecimal: Literal[True] = True) -> TransactionDict[str]: ...
 
     @overload
-    def deserialize(self, *, hexdecimal: Literal[False]) -> TransactionDict[bytes]: ...
+    def deserialize(self, *, hexadecimal: Literal[False]) -> TransactionDict[bytes]: ...
 
-    def deserialize(self, *, hexdecimal: bool = True) -> TransactionDict:
+    def deserialize(self, *, hexadecimal: bool = True) -> TransactionDict:
         """
         :param hexdecimal: Return hex string
         """
@@ -481,9 +482,9 @@ class TransactionDeserializer:
         inps_count = self.pop_size()
         for _ in range(inps_count):
             tx['inputs'].append({
-                'txid': self.pop(32)[::-1].hex() if hexdecimal else self.pop(32)[::-1],
+                'txid': self.pop(32)[::-1].hex() if hexadecimal else self.pop(32)[::-1],
                 'vout': uint32.unpack(self.pop(4)),
-                'script': self.pop(self.pop_size()).hex() if hexdecimal else self.pop(self.pop_size()),
+                'script': self.pop(self.pop_size()).hex() if hexadecimal else self.pop(self.pop_size()),
                 'sequence': uint32.unpack(self.pop(4))
             })
 
@@ -492,7 +493,7 @@ class TransactionDeserializer:
         for _ in range(outs_count):
             amount = sint64.unpack(self.pop(8))
             tx['outputs'].append({
-                'pkscript': self.pop(self.pop_size()).hex() if hexdecimal else self.pop(self.pop_size()),
+                'pkscript': self.pop(self.pop_size()).hex() if hexadecimal else self.pop(self.pop_size()),
                 'amount': amount
             })
 
@@ -501,7 +502,7 @@ class TransactionDeserializer:
             for inp_index in range(inps_count):
                 items_count = self.pop_size(segwit=True)
                 witness = Script.deserialize(self.read(), segwit=True, length=items_count).serialize(segwit=True)
-                tx['inputs'][inp_index]['witness'] = witness.hex() if hexdecimal else witness
+                tx['inputs'][inp_index]['witness'] = witness.hex() if hexadecimal else witness
 
                 # sort order
                 seq = tx['inputs'][inp_index].pop('sequence')  # type: ignore
@@ -561,7 +562,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
 
     @classmethod
     def deserialize(cls, raw: bytes) -> 'RawTransaction':
-        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize(hexdecimal=False)
+        d: TransactionDict[bytes] = TransactionDeserializer(raw).deserialize(hexadecimal=False)
 
         # convert dict inputs to Input objects
         inputs = []
