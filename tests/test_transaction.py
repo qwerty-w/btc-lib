@@ -179,7 +179,7 @@ class TestOutput:
         assert o.serialize().hex() == out.json['serialized']
 
     def test_copy(self, out: outobj):
-        return _test_copy(out.ins, ['pkscript', 'amount', '_address'])
+        return _test_copy(out.ins, ['pkscript', 'amount', 'address'])
 
     def test_serialize(self, out: outobj):
         assert out.ins.serialize().hex() == out.json['serialized']
