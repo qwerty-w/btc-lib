@@ -65,18 +65,22 @@ class Unspent(SupportsDump):
             {'block': self.block, 'address': self.address}
         )
 
-    def as_dict(self) -> UnspentDict[str]:
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> UnspentDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> UnspentDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> UnspentDict:
+        pkscript = self.address.pkscript.serialize()
         return {
-            'txid': self.txid.hex(),
+            'txid': self.txid.hex() if hexadecimal else self.txid,
             'vout': self.vout,
             'amount': self.amount,
             'block': self.block,
-            'pkscript': self.address.pkscript.serialize().hex(),
+            'pkscript': pkscript.hex() if hexadecimal else pkscript,
             'address': self.address.string
         }
-
-    def as_json(self, indent: Optional[int] = None, **kwargs) -> str:
-        return super().as_json(self.as_dict(), indent, **kwargs)
 
 
 class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
@@ -137,19 +141,24 @@ class RawInput(SupportsCopy, SupportsDump, SupportsSerialize):
 
         return b
 
-    def as_dict(self) -> InputDict[str]:
-        d: InputDict[str] = {
-            'txid': self.txid.hex(),
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> InputDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> InputDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> InputDict:
+        script = self.script.serialize()
+        d: InputDict = {
+            'txid': self.txid.hex() if hexadecimal else self.txid,
             'vout': self.vout,
-            'script': self.script.serialize().hex()
+            'script': script.hex() if hexadecimal else script
         }  # type: ignore
         if self.witness:
-            d['witness'] = self.witness.serialize().hex()
+            witness = self.witness.serialize()
+            d['witness'] = witness.hex() if hexadecimal else witness
         d['sequence'] = self.sequence
         return d
-
-    def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
-        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class UnsignableInput(RawInput, SupportsCopyAndAmount):
@@ -181,12 +190,18 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
     def copy(self) -> 'UnsignableInput':
         return UnsignableInput(self.txid, self.vout, self.amount, self.sequence, self.script, self.witness)
 
-    def as_dict(self) -> InputDict[str]:
-        d = OrderedDict(super().as_dict())
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> InputDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> InputDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> InputDict:
+        d = OrderedDict(super().as_dict(hexadecimal=hexadecimal))  # type: ignore
         d['amount'] = self.amount
         for K in ['amount', 'vout', 'txid']:
             d.move_to_end(K, last=False)
-        return cast(InputDict[str], dict(d))
+        return dict(d)  # type: ignore
 
 
 class CoinbaseInput(UnsignableInput):
@@ -216,8 +231,14 @@ class CoinbaseInput(UnsignableInput):
         """
         return bytes2int(self.script[0], 'little')  # type: ignore todo: maybe prevent indexerror?
 
-    def as_dict(self) -> InputDict[str]:
-        return RawInput.as_dict(self)
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> InputDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> InputDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> InputDict:
+        return RawInput.as_dict(self, hexadecimal=hexadecimal)  # type: ignore
 
 
 class Input(UnsignableInput):
@@ -284,9 +305,15 @@ class Input(UnsignableInput):
     def copy(self) -> 'Input':
         return Input(self.txid, self.vout, self.amount, self.private, self.address, self.sequence, self.script, self.witness)
 
-    def as_dict(self) -> InputDict[str]:
-        d = super().as_dict()
-        sequence = d.pop('sequence')  # type: ignore
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> InputDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> InputDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> InputDict:
+        d = super().as_dict(hexadecimal=hexadecimal)  # type: ignore
+        sequence = d.pop('sequence')
         d['address'] = self.address.string
         d['sequence'] = sequence
         return d
@@ -322,14 +349,18 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         size = varint(len(b)).pack()
         return b''.join([self.amount.pack(), size, b])
 
-    def as_dict(self) -> OutputDict[str]:
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> OutputDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> OutputDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> OutputDict:
+        pkscript = self.pkscript.serialize()
         return {
-            'pkscript': self.pkscript.serialize().hex(),
+            'pkscript': pkscript.hex() if hexadecimal else pkscript,
             'amount': self.amount
         }
-
-    def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
-        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class EmptyOutput(Output):
@@ -458,11 +489,11 @@ class TransactionDeserializer:
         return size
 
     @overload
-    def deserialize(self, *, hexadecimal: Literal[True] = True) -> TransactionDict[str]: ...
-
+    def deserialize(self, *, hexadecimal: Literal[True] = True) -> TransactionDict[str]:
+        ...
     @overload
-    def deserialize(self, *, hexadecimal: Literal[False]) -> TransactionDict[bytes]: ...
-
+    def deserialize(self, *, hexadecimal: Literal[False]) -> TransactionDict[bytes]:
+        ...
     def deserialize(self, *, hexadecimal: bool = True) -> TransactionDict:
         """
         :param hexdecimal: Return hex string
@@ -533,7 +564,7 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
     def __eq__(self, value: object) -> bool:
         match value:
             case RawTransaction():
-                return self.as_dict() == value.as_dict()
+                return type(self) is type(value) and self.as_dict() == value.as_dict()
             case _:
                 return super().__eq__(value)
 
@@ -631,16 +662,19 @@ class RawTransaction(SupportsDump, SupportsSerialize, SupportsCopy):
             self.locktime
         )
 
-    def as_dict(self) -> TransactionDict[str]:
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[True] = True) -> TransactionDict[str]:
+        ...
+    @overload
+    def as_dict(self, *, hexadecimal: Literal[False]) -> TransactionDict[bytes]:
+        ...
+    def as_dict(self, *, hexadecimal: bool = True) -> TransactionDict:
         return {
-            'inputs': [inp.as_dict() for inp in self.inputs],
-            'outputs': [out.as_dict() for out in self.outputs],
+            'inputs': [inp.as_dict(hexadecimal=hexadecimal) for inp in self.inputs],  # type: ignore
+            'outputs': [out.as_dict(hexadecimal=hexadecimal) for out in self.outputs],  # type: ignore
             'version': self.version,
             'locktime': self.locktime
         }
-
-    def as_json(self, *, indent: Optional[int] = None, **kwargs) -> str:
-        return super().as_json(self.as_dict(), indent=indent, **kwargs)
 
 
 class Transaction(RawTransaction):

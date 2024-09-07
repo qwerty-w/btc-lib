@@ -12,14 +12,13 @@ byteorder_T = Literal['little', 'big']
 
 
 @runtime_checkable
-class SupportsDump(Protocol):
+class SupportsDump(Protocol):  # abstract class actually
     @abstractmethod
     def as_dict(self) -> dict:
         ...
 
-    @abstractmethod
-    def as_json(self, value: Mapping[Any, Any] | list, indent: Optional[int] = None, **kwargs) -> str:
-        return json.dumps(value, indent=indent, **kwargs)
+    def as_json(self, indent: Optional[int] = None, **kwargs) -> str:
+        return json.dumps(self.as_dict(), indent=indent, **kwargs)
 
 
 @runtime_checkable
