@@ -310,9 +310,6 @@ class BlockstreamAPI(ExplorerAPI):
         'head-block': '{uri}/blocks/tip/height',
         'push': '{uri}/tx'
     }
-    pushing = {
-        'param': 'data'
-    }
 
     def handle_response(self, r: httpx.Response) -> None:
         if r.status_code == 400:
@@ -400,7 +397,8 @@ class BlockstreamAPI(ExplorerAPI):
         return Block(self.get('head-block').text)
 
     def push(self, tx: RawTransaction) -> BroadcastedTransaction:
-        self.post('push', session_params={'data': { self.pushing['param']: tx.serialize().hex() }})
+        r = self.post('push', session_params={'data': tx.serialize().hex()}, handle_response=False)
+        super().handle_response(r)
         return BroadcastedTransaction.fromraw(tx, -1, self.network)
 
 
