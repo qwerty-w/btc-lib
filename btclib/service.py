@@ -188,7 +188,7 @@ class ExplorerAPI(BaseAPI):
     def head(self) -> Block:
         raise NotImplementedError
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         raise NotImplementedError
 
 
@@ -290,9 +290,9 @@ class BlockchairAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['context']['state'])
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
-        return BroadcastedTransaction.fromraw(tx, -1, self.network)
+        return True
 
 
 class BlockstreamAPI(ExplorerAPI):
@@ -396,10 +396,10 @@ class BlockstreamAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').text)
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         r = self.post('push', session_params={'data': tx.serialize().hex()}, handle_response=False)
         super().handle_response(r)
-        return BroadcastedTransaction.fromraw(tx, -1, self.network)
+        return True
 
 
 class BlockchainAPI(ExplorerAPI):
@@ -490,7 +490,7 @@ class BlockchainAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['height'])
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         self.post('push', session_params={
             'headers': {
                 'accept': 'application/json',
@@ -498,7 +498,7 @@ class BlockchainAPI(ExplorerAPI):
             },
             'data': tx.serialize().hex()
         })
-        return BroadcastedTransaction.fromraw(tx, -1, self.network)
+        return True
 
 
 class BlockcypherAPI(ExplorerAPI):  # todo: implement me
@@ -530,7 +530,7 @@ class BlockcypherAPI(ExplorerAPI):  # todo: implement me
     def head(self) -> Block:
         raise NotImplementedError
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         raise NotImplementedError
 
 
@@ -576,9 +576,9 @@ class BitcoreAPI(ExplorerAPI):
     def head(self) -> Block:
         return Block(self.get('head-block').json()['height'])
 
-    def push(self, tx: RawTransaction) -> BroadcastedTransaction:
+    def push(self, tx: RawTransaction) -> typing.Literal[True]:
         self.post('push', session_params={'json': { self.pushing['param']: tx.serialize().hex() }})
-        return BroadcastedTransaction.fromraw(tx, -1, self.network)
+        return True
 
 
 class Service(ExplorerAPI):
@@ -678,7 +678,7 @@ class Service(ExplorerAPI):
     def push(self,
              tx: RawTransaction,
              priority: typing.Optional[_api_priority_T] = None,
-             ignored_errors: typing.Optional[_network_errors_T] = None) -> BroadcastedTransaction:
+             ignored_errors: typing.Optional[_network_errors_T] = None) -> typing.Literal[True]:
         return self.call('push', [tx], {}, priority, ignored_errors)
 
     def convert_transaction(self,
