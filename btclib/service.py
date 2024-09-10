@@ -388,7 +388,7 @@ class BlockstreamAPI(ExplorerAPI):
                 bytes.fromhex(tx['txid']),
                 tx['vout'],
                 tx['value'],
-                Block(tx['status']['block_height']),
+                Block(tx['status'].get('block_height', -1)),
                 address
             ) for tx in r.json()
         ]
