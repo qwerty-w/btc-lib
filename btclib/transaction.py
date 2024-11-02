@@ -3,7 +3,7 @@ from typing import Iterable, Optional, Self, TypedDict, NotRequired, cast, overl
 
 from btclib.script import opcode, Script
 from btclib.utils import SupportsDump, SupportsSerialize, SupportsCopy, SupportsCopyAndAmount, \
-                         ioList, TypeConverter, uint32, sint64, varint, d_sha256, op_hash160, \
+                         ioList, TypeConverter, uint32, int64, varint, d_sha256, op_hash160, \
                          bytes2int, pprint_class
 from btclib.address import BaseAddress, PrivateKey, P2PKH, P2SH, P2WPKH, P2WSH, from_pkscript
 from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEFAULT_LOCKTIME, \
@@ -13,7 +13,7 @@ from btclib.const import DEFAULT_NETWORK, DEFAULT_SEQUENCE, DEFAULT_VERSION, DEF
 class UnspentDict[T: str | bytes](TypedDict):
     txid: T
     vout: uint32
-    amount: sint64
+    amount: int64
     block: int
     pkscript: T
     address: str
@@ -31,7 +31,7 @@ class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.1
 
 class OutputDict[T: str | bytes](TypedDict):
     pkscript: T
-    amount: sint64
+    amount: int64
     address: NotRequired[str]
 
 
@@ -49,7 +49,7 @@ class Block(int):
 
 class Unspent(SupportsDump):
     vout: TypeConverter[int, uint32] = TypeConverter(uint32)
-    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
+    amount: TypeConverter[int, int64] = TypeConverter(int64)
     block: TypeConverter[int, Block] = TypeConverter(Block)
 
     def __init__(self, txid: bytes, vout: int, amount: int, block: int | Block, address: BaseAddress) -> None:
@@ -168,7 +168,7 @@ class UnsignableInput(RawInput, SupportsCopyAndAmount):
     which is why it can't be signed using .default_sign (but can still using .custom_sign)
     """
 
-    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
+    amount: TypeConverter[int, int64] = TypeConverter(int64)
 
     def __init__(self, txid: bytes, vout: int, amount: int, sequence: int = DEFAULT_SEQUENCE,
                  script: Optional[Script] = None, witness: Optional[Script] = None) -> None:
@@ -321,7 +321,7 @@ class Input(UnsignableInput):
 
 
 class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
-    amount: TypeConverter[int, sint64] = TypeConverter(sint64)
+    amount: TypeConverter[int, int64] = TypeConverter(int64)
 
     def __init__(self, pkscript: Script, amount: int) -> None:
         self.pkscript = pkscript
@@ -526,7 +526,7 @@ class TransactionDeserializer:
         # outputs
         outs_count = self.pop_size()
         for _ in range(outs_count):
-            amount = sint64.unpack(self.pop(8))
+            amount = int64.unpack(self.pop(8))
             tx['outputs'].append({
                 'pkscript': self.pop(self.pop_size()).hex() if hexadecimal else self.pop(self.pop_size()),
                 'amount': amount

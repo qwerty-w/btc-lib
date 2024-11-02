@@ -137,15 +137,15 @@ class _int(int, ABC):
         return super().to_bytes(self.size, byteorder, signed=self._signed)
 
 
-class _sint(_int):
+class _signedint(_int):
     _signed = True
 
 
-class sint32(_sint):
+class int32(_signedint):
     size = 4
 
 
-class sint64(_sint):
+class int64(_signedint):
     size = 8
 
 

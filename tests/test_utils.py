@@ -36,7 +36,7 @@ i2b_data = [
 ]
 
 
-@pytest.fixture(params=[sint32, sint64, uint32, uint64])
+@pytest.fixture(params=[int32, int64, uint32, uint64])
 def int_cls(request):
     return request.param
 
