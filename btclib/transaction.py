@@ -32,6 +32,7 @@ class InputDict[T: str | bytes](TypedDict):  # T: str | bytes = bytes (python3.1
 class OutputDict[T: str | bytes](TypedDict):
     pkscript: T
     amount: sint64
+    address: NotRequired[str]
 
 
 class TransactionDict[T: str | bytes](TypedDict):
@@ -357,10 +358,13 @@ class Output(SupportsCopyAndAmount, SupportsDump, SupportsSerialize):
         ...
     def as_dict(self, *, hexadecimal: bool = True) -> OutputDict:
         pkscript = self.pkscript.serialize()
-        return {
+        d: OutputDict = {
             'pkscript': pkscript.hex() if hexadecimal else pkscript,
-            'amount': self.amount
+            'amount': self.amount,
         }
+        if self.address:
+            d['address'] = self.address.string
+        return d
 
 
 class EmptyOutput(Output):
