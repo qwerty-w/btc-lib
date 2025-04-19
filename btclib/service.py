@@ -732,7 +732,7 @@ class FeeRate:
 
 class FeeRateAPI(BaseAPI):
     @abstractmethod
-    def get_rate() -> FeeRate:
+    def get_rate(self) -> FeeRate:
         raise NotImplementedError
 
     def calcfee(self, vsize: int, rate: typing.Optional[FeeRate] = None) -> FeeRate:
