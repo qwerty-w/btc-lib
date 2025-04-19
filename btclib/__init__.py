@@ -7,4 +7,4 @@ from btclib.transaction import Block, Unspent, RawInput, UnsignableInput, Coinba
     Input, Output, RawTransaction, Transaction, BroadcastedTransaction
 
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'

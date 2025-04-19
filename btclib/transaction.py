@@ -316,7 +316,7 @@ class Input(UnsignableInput):
         d = super().as_dict(hexadecimal=hexadecimal)  # type: ignore
         sequence = d.pop('sequence')
         d['address'] = self.address.string
-        d['sequence'] = sequence
+        d['sequence'] = sequence  # type: ignore
         return d
 
 
@@ -541,7 +541,7 @@ class TransactionDeserializer:
 
                 # sort order
                 seq = tx['inputs'][inp_index].pop('sequence')  # type: ignore
-                tx['inputs'][inp_index]['sequence'] = seq
+                tx['inputs'][inp_index]['sequence'] = seq  # type: ignore
 
                 self.pop(len(witness))
 
